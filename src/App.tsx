@@ -35,6 +35,7 @@ import {
 } from './components/PostPaymentModal';
 import { NewsletterAndVipSection } from './components/NewsletterAndVipSection';
 import { CookieConsentBanner } from './components/CookieConsentBanner';
+import { trackStoreEvent } from './lib/storeAnalytics';
 
 export default function App() {
   const [products, setProducts] = useState<JacketProduct[]>(INITIAL_EIGHT_PRODUCTS);
@@ -52,9 +53,10 @@ export default function App() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [orderConfirmation, setOrderConfirmation] = useState<OrderConfirmationState | null>(null);
 
-  // Only preload the 5 hero front cutouts (not 30+ full-res gallery shots)
+  // Only preload the 5 hero front cutouts (not 30+ full-res gallery shots) + record 1st-party page_view
   useEffect(() => {
     preloadGalleryImages(KHABIBI_COLORS.map((c) => c.frontImage));
+    trackStoreEvent('page_view');
   }, []);
 
   // Load authoritative Reverse-Shopify catalog from server
@@ -255,6 +257,12 @@ export default function App() {
             currency: 'EUR',
             value: khabibiProduct.priceEur,
           });
+          trackStoreEvent('view_content', {
+            productId: 'khabibi',
+            productName: khabibiProduct.name,
+            colorName: variant.name,
+            valueEur: khabibiProduct.priceEur,
+          });
         }
       }
     },
@@ -296,6 +304,12 @@ export default function App() {
         size: payload.sizeLabel,
         currency: 'EUR',
         value: payload.priceEur,
+      });
+      trackStoreEvent('add_to_cart', {
+        productId: payload.productId,
+        productName: payload.productName,
+        colorName: payload.colorVariant.name,
+        valueEur: payload.priceEur,
       });
 
       if (openDrawer) {
@@ -386,6 +400,12 @@ export default function App() {
         undefined,
         checkoutEventId
       );
+      trackStoreEvent('initiate_checkout', {
+        productId: payload.productId,
+        productName: payload.productName,
+        colorName: payload.colorVariant.name,
+        valueEur: effectiveEur,
+      });
 
       try {
         const res = await fetch('/api/checkout/create-session', {
@@ -500,6 +520,7 @@ export default function App() {
         <ProductConfigurator
           selectedColorId={selectedColorId}
           priceEur={khabibiProduct.priceEur}
+          compareAtEur={khabibiProduct.compareAtEur}
           stockTotal={khabibiProduct.stockTotal}
           extraGalleryUrls={khabibiProduct.gallery}
           fastCheckoutLoading={fastCheckoutLoading}
@@ -526,6 +547,12 @@ export default function App() {
               leather_color: colorName,
               currency: 'EUR',
               value: prod.priceEur,
+            });
+            trackStoreEvent('view_content', {
+              productId: prod.id,
+              productName: prod.name,
+              colorName,
+              valueEur: prod.priceEur,
             });
           }}
         />
@@ -575,6 +602,12 @@ export default function App() {
             undefined,
             eventId
           );
+          trackStoreEvent('initiate_checkout', {
+            productId: items[0]?.productId,
+            productName: items.map((i) => i.productName).join(', '),
+            colorName: items[0]?.colorVariant.name,
+            valueEur: totalEur,
+          });
         }}
         onPreviewPurchaseComplete={(sessionId, totalEur, items, meta) => {
           trackMetaEvent(

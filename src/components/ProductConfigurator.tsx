@@ -31,6 +31,7 @@ export interface ConfiguredOrderPayload {
 interface ProductConfiguratorProps {
   selectedColorId: string;
   priceEur?: number;
+  compareAtEur?: number;
   stockTotal?: number;
   extraGalleryUrls?: string[];
   fastCheckoutLoading?: boolean;
@@ -42,6 +43,7 @@ interface ProductConfiguratorProps {
 export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
   selectedColorId,
   priceEur = 177,
+  compareAtEur = 354,
   stockTotal = 631,
   extraGalleryUrls = [],
   fastCheckoutLoading = false,
@@ -49,6 +51,7 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
   onAddToCart,
   onDirectStripeCheckout,
 }) => {
+  const isOutOfStock = stockTotal <= 0;
   const activeVariant: KhabibiColorVariant = useMemo(
     () => KHABIBI_COLORS.find((v) => v.id === selectedColorId) ?? KHABIBI_COLORS[0],
     [selectedColorId]
@@ -250,7 +253,12 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
           </div>
 
           <p className="mt-3 text-[11.5px] font-bold tracking-[0.18em] uppercase text-black/70">
-            01 · 100 % NATUR-LAMMNAPPA · KLEIN-CHARGE MARRAKESCH · {stockTotal} STK. VERFÜGBAR
+            01 · 100 % NATUR-LAMMNAPPA · KLEIN-CHARGE MARRAKESCH ·{' '}
+            {isOutOfStock ? (
+              <span className="text-red-700">AKTUELL AUSVERKAUFT</span>
+            ) : (
+              <span>{stockTotal} STK. VERFÜGBAR</span>
+            )}
           </p>
           <h2 className="mt-1.5 font-masculine text-[32px] md:text-[42px] leading-[1.02] text-black">
             MODEL KHABIBI — {activeVariant.name}
@@ -260,10 +268,17 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
             <span className="font-masculine text-[34px] font-bold text-black">
               {priceEur},00 €
             </span>
-            <span className="text-[18px] font-semibold text-black/45 line-through">354,00 €</span>
-            <span className="px-2 py-0.5 bg-black text-white text-[11.5px] font-bold uppercase tracking-[0.06em]">
-              DU SPARST 177 € (-50 %)
-            </span>
+            {compareAtEur > priceEur && (
+              <>
+                <span className="text-[18px] font-semibold text-black/45 line-through">
+                  {compareAtEur},00 €
+                </span>
+                <span className="px-2 py-0.5 bg-black text-white text-[11.5px] font-bold uppercase tracking-[0.06em]">
+                  DU SPARST {compareAtEur - priceEur} € (
+                  -{Math.round(((compareAtEur - priceEur) / compareAtEur) * 100)} %)
+                </span>
+              </>
+            )}
           </div>
 
           <p className="mt-2 text-[12px] font-bold uppercase tracking-[0.08em] text-black">
@@ -445,26 +460,34 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
 
           {/* Actions: 1-Click Express Checkout + Add to Cart */}
           <div className="mt-6 flex flex-col sm:flex-row gap-2.5">
-            <button
-              type="button"
-              disabled={fastCheckoutLoading}
-              onClick={() => onDirectStripeCheckout(buildPayload())}
-              className="flex-1 h-[50px] px-5 bg-black text-white text-[14px] font-bold uppercase tracking-[0.06em] hover:bg-neutral-800 disabled:opacity-60 transition-colors inline-flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <span>
-                {fastCheckoutLoading
-                  ? 'EXPRESS-KASSE ÖFFNET…'
-                  : `⚡ SOFORT KAUFEN — ${priceEur},00 €`}
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => onAddToCart(buildPayload(), true)}
-              className="h-[50px] px-5 border-2 border-black bg-white text-black text-[13.5px] font-bold uppercase tracking-[0.05em] hover:bg-black hover:text-white transition-colors inline-flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
-            >
-              <ShoppingBag className="w-4 h-4" />
-              <span>IN DEN WARENKORB</span>
-            </button>
+            {isOutOfStock ? (
+              <div className="w-full h-[50px] px-5 bg-neutral-200 text-neutral-600 text-[13.5px] font-bold uppercase tracking-[0.06em] inline-flex items-center justify-center">
+                AKTUELL AUSVERKAUFT — NÄCHSTE CHARGE IN KÜRZE
+              </div>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  disabled={fastCheckoutLoading}
+                  onClick={() => onDirectStripeCheckout(buildPayload())}
+                  className="flex-1 h-[50px] px-5 bg-black text-white text-[14px] font-bold uppercase tracking-[0.06em] hover:bg-neutral-800 disabled:opacity-60 transition-colors inline-flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <span>
+                    {fastCheckoutLoading
+                      ? 'EXPRESS-KASSE ÖFFNET…'
+                      : `⚡ SOFORT KAUFEN — ${priceEur},00 €`}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onAddToCart(buildPayload(), true)}
+                  className="h-[50px] px-5 border-2 border-black bg-white text-black text-[13.5px] font-bold uppercase tracking-[0.05em] hover:bg-black hover:text-white transition-colors inline-flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
+                >
+                  <ShoppingBag className="w-4 h-4" />
+                  <span>IN DEN WARENKORB</span>
+                </button>
+              </>
+            )}
           </div>
 
           {/* Trusted Payment Partners & Post-Payment Bespoke + Direct Contact */}

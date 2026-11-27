@@ -249,9 +249,15 @@ export const CollectionSixSection: React.FC<CollectionSixSectionProps> = ({
                       <span className="px-2 py-0.5 bg-black text-white text-[10px] font-bold tracking-[0.08em] uppercase">
                         {jacket.leatherType}
                       </span>
-                      <span className="px-1.5 py-0.5 bg-white border border-black text-black text-[10px] font-bold tracking-[0.06em] uppercase tabular-nums">
-                        -50 %
-                      </span>
+                      {jacket.stockTotal <= 0 ? (
+                        <span className="px-1.5 py-0.5 bg-red-600 text-white text-[10px] font-bold tracking-[0.06em] uppercase">
+                          Ausverkauft
+                        </span>
+                      ) : jacket.compareAtEur > jacket.priceEur ? (
+                        <span className="px-1.5 py-0.5 bg-white border border-black text-black text-[10px] font-bold tracking-[0.06em] uppercase tabular-nums">
+                          -{Math.round(((jacket.compareAtEur - jacket.priceEur) / jacket.compareAtEur) * 100)} %
+                        </span>
+                      ) : null}
                     </div>
 
                     <span className="absolute right-2.5 top-2.5 h-8 px-2 bg-white border border-black text-black flex items-center gap-1 group-hover:bg-black group-hover:text-white transition-colors pointer-events-none">
@@ -374,33 +380,38 @@ export const CollectionSixSection: React.FC<CollectionSixSectionProps> = ({
                   </div>
 
                   <div className="flex gap-1.5">
+                    {jacket.stockTotal <= 0 ? (
+                      <span className="flex-1 h-9 px-2.5 bg-neutral-200 text-neutral-600 text-[11.5px] font-bold uppercase tracking-[0.05em] flex items-center justify-center">
+                        Ausverkauft
+                      </span>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          disabled={fastCheckoutLoading}
+                          onClick={() =>
+                            onDirectFastCheckout
+                              ? onDirectFastCheckout(buildProductPayload(jacket))
+                              : handleBuyProduct(jacket, true)
+                          }
+                          className="flex-1 h-9 px-2.5 bg-black text-white text-[12px] font-bold uppercase tracking-[0.05em] hover:bg-neutral-800 disabled:opacity-60 flex items-center justify-center gap-1 cursor-pointer"
+                        >
+                          <span>⚡ Sofort kaufen</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleBuyProduct(jacket, true)}
+                          aria-label={`${jacket.name} in den Warenkorb`}
+                          title="In den Warenkorb"
+                          className="h-9 px-2.5 border border-black text-black text-[11.5px] font-bold uppercase hover:bg-black hover:text-white transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                        >
+                          <ShoppingBag className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    )}
                     <button
                       type="button"
-                      disabled={fastCheckoutLoading}
-                      onClick={() =>
-                        onDirectFastCheckout
-                          ? onDirectFastCheckout(buildProductPayload(jacket))
-                          : handleBuyProduct(jacket, true)
-                      }
-                      className="flex-1 h-9 px-2.5 bg-black text-white text-[12px] font-bold uppercase tracking-[0.05em] hover:bg-neutral-800 disabled:opacity-60 flex items-center justify-center gap-1 cursor-pointer"
-                    >
-                      <span>⚡ Sofort kaufen</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleBuyProduct(jacket, true)}
-                      aria-label={`${jacket.name} in den Warenkorb`}
-                      title="In den Warenkorb"
-                      className="h-9 px-2.5 border border-black text-black text-[11.5px] font-bold uppercase hover:bg-black hover:text-white transition-colors flex items-center justify-center gap-1 cursor-pointer"
-                    >
-                      <ShoppingBag className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDetailProduct(jacket);
-                        setDetailImageIdx(0);
-                      }}
+                      onClick={openDetails}
                       className="h-9 px-2 border border-black/30 text-black text-[11px] font-bold uppercase hover:border-black transition-colors cursor-pointer"
                     >
                       Fotos ({jacket.gallery.length})
@@ -613,33 +624,41 @@ export const CollectionSixSection: React.FC<CollectionSixSectionProps> = ({
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-2">
-                  <button
-                    type="button"
-                    disabled={fastCheckoutLoading}
-                    onClick={() => {
-                      const payload = buildProductPayload(detailProduct);
-                      setDetailProduct(null);
-                      if (onDirectFastCheckout) {
-                        onDirectFastCheckout(payload);
-                      } else {
-                        onAddToCart(payload, true);
-                      }
-                    }}
-                    className="flex-1 h-12 bg-black text-white text-[13.5px] font-bold uppercase tracking-[0.06em] hover:bg-neutral-800 disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <span>⚡ SOFORT KAUFEN — {detailProduct.priceEur},00 €</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleBuyProduct(detailProduct, true);
-                      setDetailProduct(null);
-                    }}
-                    className="h-12 px-4 border-2 border-black bg-white text-black text-[13px] font-bold uppercase tracking-[0.05em] hover:bg-black hover:text-white flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <ShoppingBag className="w-4 h-4" />
-                    <span>WARENKORB</span>
-                  </button>
+                  {detailProduct.stockTotal <= 0 ? (
+                    <div className="w-full h-12 bg-neutral-200 text-neutral-600 text-[13px] font-bold uppercase tracking-[0.06em] flex items-center justify-center">
+                      AKTUELL AUSVERKAUFT
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        disabled={fastCheckoutLoading}
+                        onClick={() => {
+                          const payload = buildProductPayload(detailProduct);
+                          setDetailProduct(null);
+                          if (onDirectFastCheckout) {
+                            onDirectFastCheckout(payload);
+                          } else {
+                            onAddToCart(payload, true);
+                          }
+                        }}
+                        className="flex-1 h-12 bg-black text-white text-[13.5px] font-bold uppercase tracking-[0.06em] hover:bg-neutral-800 disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <span>⚡ SOFORT KAUFEN — {detailProduct.priceEur},00 €</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleBuyProduct(detailProduct, true);
+                          setDetailProduct(null);
+                        }}
+                        className="h-12 px-4 border-2 border-black bg-white text-black text-[13px] font-bold uppercase tracking-[0.05em] hover:bg-black hover:text-white flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <ShoppingBag className="w-4 h-4" />
+                        <span>WARENKORB</span>
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>

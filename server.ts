@@ -14,6 +14,64 @@ const __dirname = path.dirname(__filename);
 const PORT = Number(process.env.PORT) || 3000;
 const DATA_DIR = path.resolve(process.cwd(), 'data');
 const STATE_FILE = path.resolve(DATA_DIR, 'store-state.json');
+const UPLOADS_DIR = path.resolve(DATA_DIR, 'uploads');
+const ANALYTICS_FILE = path.resolve(DATA_DIR, 'analytics.json');
+
+interface StoreAnalyticsEvent {
+  ts: number;
+  day: string;
+  sid: string;
+  type: 'page_view' | 'view_content' | 'add_to_cart' | 'initiate_checkout' | 'purchase';
+  source: string;
+  device: 'mobile' | 'desktop';
+  productId?: string;
+  productName?: string;
+  colorName?: string;
+  valueEur?: number;
+  orderId?: string;
+}
+
+interface AnalyticsStore {
+  events: StoreAnalyticsEvent[];
+}
+
+function loadAnalyticsStore(): AnalyticsStore {
+  try {
+    if (!fs.existsSync(ANALYTICS_FILE)) return { events: [] };
+    const parsed = JSON.parse(fs.readFileSync(ANALYTICS_FILE, 'utf8')) as Partial<AnalyticsStore>;
+    return { events: Array.isArray(parsed.events) ? parsed.events.slice(-30000) : [] };
+  } catch {
+    return { events: [] };
+  }
+}
+
+let analyticsStore: AnalyticsStore = loadAnalyticsStore();
+let analyticsSaveTimer: NodeJS.Timeout | null = null;
+
+function flushAnalyticsStore(): void {
+  if (analyticsSaveTimer) {
+    clearTimeout(analyticsSaveTimer);
+    analyticsSaveTimer = null;
+  }
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    if (analyticsStore.events.length > 30000) {
+      analyticsStore.events = analyticsStore.events.slice(-30000);
+    }
+    fs.writeFileSync(ANALYTICS_FILE, JSON.stringify(analyticsStore), 'utf8');
+  } catch (err) {
+    console.error('Persist analytics error:', err);
+  }
+}
+
+function scheduleAnalyticsSave(immediate = false): void {
+  if (immediate) {
+    flushAnalyticsStore();
+    return;
+  }
+  if (analyticsSaveTimer) return;
+  analyticsSaveTimer = setTimeout(flushAnalyticsStore, 2500);
+}
 
 interface PixelConfigState {
   pixelId: string;
@@ -138,31 +196,76 @@ function loadStoreState(): StoreState {
     const parsed = JSON.parse(raw) as Partial<StoreState>;
     const defaults = createDefaultState();
 
-    // Merge latest media/colors/descriptions from catalog while preserving admin-edited price/stock/active and custom products
+    // Preserve admin-edited products (gallery order, colors, prices, stock, names & product order)
+    // while upgrading any legacy dead cdn.shopify.com or .png aistudio links to clean defaults.
     const savedList = Array.isArray(parsed.products) ? parsed.products : [];
-    const savedById = new Map(savedList.map((p) => [p.id, p]));
-    const defaultIds = new Set(defaults.products.map((p) => p.id));
-    const mergedDefaults = defaults.products.map((defProd) => {
-      const saved = savedById.get(defProd.id);
-      if (!saved) return defProd;
-      return {
-        ...defProd,
-        priceEur:
-          typeof saved.priceEur === 'number' && saved.priceEur >= 49 && saved.priceEur <= 999
-            ? saved.priceEur
-            : 177,
-        compareAtEur:
-          typeof saved.compareAtEur === 'number' && saved.compareAtEur > 0
-            ? saved.compareAtEur
-            : 354,
-        stockTotal: typeof saved.stockTotal === 'number' ? saved.stockTotal : defProd.stockTotal,
-        active: typeof saved.active === 'boolean' ? saved.active : defProd.active,
-      };
-    });
-    const customProducts = savedList.filter(
-      (p) => p && typeof p.id === 'string' && !defaultIds.has(p.id)
-    );
-    const mergedProducts = [...mergedDefaults, ...customProducts];
+    const defaultById = new Map(defaults.products.map((p) => [p.id, p]));
+    const hasLegacyUrl = (u: string) =>
+      !u || u.includes('cdn.shopify.com') || (u.startsWith('/assets/aistudio/') && u.endsWith('.png'));
+
+    let mergedProducts: JacketProduct[];
+    if (savedList.length > 0) {
+      const seenIds = new Set<string>();
+      mergedProducts = [];
+      for (const saved of savedList) {
+        if (!saved || typeof saved.id !== 'string') continue;
+        seenIds.add(saved.id);
+        const defProd = defaultById.get(saved.id);
+        if (!defProd) {
+          mergedProducts.push(saved);
+          continue;
+        }
+        const savedGalleryClean =
+          Array.isArray(saved.gallery) &&
+          saved.gallery.length > 0 &&
+          !saved.gallery.some(hasLegacyUrl);
+        const savedColorsClean =
+          Array.isArray(saved.colors) &&
+          saved.colors.length > 0 &&
+          !saved.colors.some((c) => hasLegacyUrl(c.image));
+
+        mergedProducts.push({
+          ...defProd,
+          name: typeof saved.name === 'string' && saved.name.trim() ? saved.name : defProd.name,
+          subtitle:
+            typeof saved.subtitle === 'string' && saved.subtitle.trim()
+              ? saved.subtitle
+              : defProd.subtitle,
+          leatherType: saved.leatherType ?? defProd.leatherType,
+          tagline:
+            typeof saved.tagline === 'string' && saved.tagline.trim()
+              ? saved.tagline
+              : defProd.tagline,
+          description:
+            typeof saved.description === 'string' && saved.description.trim()
+              ? saved.description
+              : defProd.description,
+          priceEur:
+            typeof saved.priceEur === 'number' && saved.priceEur >= 1 && saved.priceEur <= 2999
+              ? saved.priceEur
+              : defProd.priceEur,
+          compareAtEur:
+            typeof saved.compareAtEur === 'number' && saved.compareAtEur >= 0
+              ? saved.compareAtEur
+              : defProd.compareAtEur,
+          gallery: savedGalleryClean ? saved.gallery : defProd.gallery,
+          colors: savedColorsClean ? saved.colors : defProd.colors,
+          stockTotal: typeof saved.stockTotal === 'number' ? saved.stockTotal : defProd.stockTotal,
+          active: typeof saved.active === 'boolean' ? saved.active : defProd.active,
+        });
+      }
+      for (const defProd of defaults.products) {
+        if (!seenIds.has(defProd.id)) {
+          mergedProducts.push(defProd);
+        }
+      }
+      mergedProducts = mergedProducts.map((p, idx) => ({
+        ...p,
+        code: String(idx + 1).padStart(2, '0'),
+      }));
+    } else {
+      mergedProducts = defaults.products;
+    }
 
     const savedPixel = parsed.pixelConfig ?? ({} as Partial<PixelConfigState>);
     const envPixel = cleanEnvSecret(process.env.META_PIXEL_ID);
@@ -596,6 +699,27 @@ async function markOrderPaidAndDispatch(order: OrderRecord): Promise<OrderRecord
     }
   }
 
+  // Record verified paid order in 1st-party analytics (idempotent by order.id)
+  if (!analyticsStore.events.some((ev) => ev.type === 'purchase' && ev.orderId === order.id)) {
+    const now = Date.now();
+    analyticsStore.events.push({
+      ts: now,
+      day: new Date(now).toISOString().slice(0, 10),
+      sid: `ord_${order.id}`,
+      type: 'purchase',
+      source: order.fbc ? 'Meta / Instagram Ads' : 'Checkout',
+      device: /iphone|ipad|android|mobile/i.test(order.clientUserAgent ?? '')
+        ? 'mobile'
+        : 'desktop',
+      productId: order.items[0]?.productId,
+      productName: order.items.map((i) => i.name).join(', '),
+      colorName: order.items[0]?.colorName,
+      valueEur: Number((order.totalCents / 100).toFixed(2)),
+      orderId: order.id,
+    });
+    scheduleAnalyticsSave(true);
+  }
+
   return order;
 }
 
@@ -613,6 +737,46 @@ async function startServer() {
   const app = express();
   // Trust Cloudflare / Cloud Run reverse proxy headers (X-Forwarded-Proto / Host / CF-Connecting-IP)
   app.set('trust proxy', true);
+
+  // Serve seller-uploaded product images from persistent data/uploads directory
+  if (!fs.existsSync(UPLOADS_DIR)) {
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+  }
+  app.use(
+    '/uploads',
+    express.static(UPLOADS_DIR, {
+      maxAge: '30d',
+      immutable: true,
+    })
+  );
+
+  // Admin image upload route (accepts up to 8MB base64 data URL before default 128kb JSON parser)
+  app.post(
+    '/api/admin/upload-image',
+    requireAdminAuth,
+    express.json({ limit: '8mb' }),
+    (req: Request, res: Response) => {
+      const body = req.body as { dataUrl?: unknown };
+      const dataUrl = typeof body.dataUrl === 'string' ? body.dataUrl.trim() : '';
+      const match = /^data:image\/(webp|jpeg|jpg|png);base64,([A-Za-z0-9+/=\s]+)$/i.exec(dataUrl);
+      if (!match) {
+        res
+          .status(400)
+          .json({ error: 'Ungültiges Bildformat (nur WEBP, JPG oder PNG erlaubt).' });
+        return;
+      }
+      const ext = match[1].toLowerCase() === 'jpeg' ? 'jpg' : match[1].toLowerCase();
+      const buf = Buffer.from(match[2], 'base64');
+      if (buf.length < 100 || buf.length > 6 * 1024 * 1024) {
+        res.status(400).json({ error: 'Bilddatei ist leer oder größer als 6 MB.' });
+        return;
+      }
+      const fileName = `prod_${Date.now()}_${crypto.randomBytes(4).toString('hex')}.${ext}`;
+      const filePath = path.resolve(UPLOADS_DIR, fileName);
+      fs.writeFileSync(filePath, buf);
+      res.json({ ok: true, url: `/uploads/${fileName}` });
+    }
+  );
 
   // Stripe Webhook must inspect raw body BEFORE express.json()
   app.post(
@@ -1031,6 +1195,10 @@ async function startServer() {
       const product = store.products.find((p) => p.id === productId && p.active);
       if (!product) {
         res.status(400).json({ error: `Unbekanntes oder pausiertes Produkt: ${productId}` });
+        return;
+      }
+      if (product.stockTotal <= 0) {
+        res.status(400).json({ error: `${product.name} ist aktuell leider ausverkauft.` });
         return;
       }
 
@@ -1631,6 +1799,339 @@ async function startServer() {
     res.send(rows.join('\n'));
   });
 
+  // --- 1st-Party Storefront Analytics Ingestion & Seller Analytics API ---
+  app.post('/api/analytics/event', (req: Request, res: Response) => {
+    const body = req.body as {
+      sid?: unknown;
+      type?: unknown;
+      source?: unknown;
+      device?: unknown;
+      productId?: unknown;
+      productName?: unknown;
+      colorName?: unknown;
+      valueEur?: unknown;
+    };
+
+    const allowedTypes = new Set([
+      'page_view',
+      'view_content',
+      'add_to_cart',
+      'initiate_checkout',
+    ]);
+    const type = typeof body.type === 'string' ? body.type : '';
+    if (!allowedTypes.has(type)) {
+      res.status(204).end();
+      return;
+    }
+
+    const sid =
+      typeof body.sid === 'string' && body.sid.trim()
+        ? body.sid.trim().slice(0, 48)
+        : `anon_${Date.now().toString(36)}`;
+    const source =
+      typeof body.source === 'string' && body.source.trim()
+        ? body.source.trim().slice(0, 40)
+        : 'Direkt';
+    const device = body.device === 'mobile' ? 'mobile' : 'desktop';
+    const now = Date.now();
+
+    analyticsStore.events.push({
+      ts: now,
+      day: new Date(now).toISOString().slice(0, 10),
+      sid,
+      type: type as StoreAnalyticsEvent['type'],
+      source,
+      device,
+      productId: typeof body.productId === 'string' ? body.productId.slice(0, 80) : undefined,
+      productName: typeof body.productName === 'string' ? body.productName.slice(0, 80) : undefined,
+      colorName: typeof body.colorName === 'string' ? body.colorName.slice(0, 50) : undefined,
+      valueEur:
+        typeof body.valueEur === 'number' && Number.isFinite(body.valueEur)
+          ? Number(body.valueEur.toFixed(2))
+          : undefined,
+    });
+    scheduleAnalyticsSave(false);
+    res.status(204).end();
+  });
+
+  app.get('/api/admin/analytics', (req: Request, res: Response) => {
+    // Allow either Admin Bearer token OR optional ANALYTICS_API_KEY (for n8n / AI tools)
+    const apiKeyEnv = cleanEnvSecret(process.env.ANALYTICS_API_KEY);
+    const providedKey =
+      (typeof req.headers['x-api-key'] === 'string' ? req.headers['x-api-key'].trim() : '') ||
+      (typeof req.query.api_key === 'string' ? req.query.api_key.trim() : '');
+
+    let authorized = false;
+    if (apiKeyEnv && providedKey && verifyPlainSecret(providedKey, apiKeyEnv)) {
+      authorized = true;
+    } else {
+      const auth = req.headers.authorization ?? '';
+      const match = /^Bearer\s+([a-f0-9]{64})$/i.exec(auth.trim());
+      if (match) {
+        const exp = adminSessions.get(match[1]);
+        if (exp && Date.now() <= exp) authorized = true;
+      }
+    }
+
+    if (!authorized) {
+      res.status(401).json({ error: 'Nicht autorisiert.' });
+      return;
+    }
+
+    const daysParam = Number(req.query.days) || 0;
+    const now = Date.now();
+    const cutoffTs =
+      daysParam > 0
+        ? daysParam === 1
+          ? new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00.000Z').getTime()
+          : now - daysParam * 24 * 60 * 60 * 1000
+        : 0;
+
+    const filteredEvents = cutoffTs
+      ? analyticsStore.events.filter((e) => e.ts >= cutoffTs)
+      : analyticsStore.events;
+
+    const paidOrders = store.orders.filter((o) => {
+      if (o.status !== 'paid') return false;
+      const t = new Date(o.paidAt ?? o.createdAt).getTime();
+      return !cutoffTs || t >= cutoffTs;
+    });
+
+    const uniqueSessionSet = new Set<string>();
+    const viewSessions = new Set<string>();
+    const cartSessions = new Set<string>();
+    const checkoutSessions = new Set<string>();
+
+    let pageViews = 0;
+    let viewContent = 0;
+    let addToCart = 0;
+    let initiateCheckout = 0;
+
+    const sourceCounts = new Map<string, Set<string>>();
+    const deviceSessions = { mobile: new Set<string>(), desktop: new Set<string>() };
+
+    const productStats = new Map<
+      string,
+      {
+        id: string;
+        name: string;
+        stockTotal: number;
+        priceEur: number;
+        active: boolean;
+        views: number;
+        carts: number;
+        checkouts: number;
+        purchases: number;
+        revenueEur: number;
+      }
+    >();
+
+    for (const p of store.products) {
+      productStats.set(p.id, {
+        id: p.id,
+        name: p.name,
+        stockTotal: p.stockTotal,
+        priceEur: p.priceEur,
+        active: p.active,
+        views: 0,
+        carts: 0,
+        checkouts: 0,
+        purchases: 0,
+        revenueEur: 0,
+      });
+    }
+
+    for (const ev of filteredEvents) {
+      if (ev.type !== 'purchase') {
+        uniqueSessionSet.add(ev.sid);
+        deviceSessions[ev.device === 'mobile' ? 'mobile' : 'desktop'].add(ev.sid);
+        const srcKey = ev.source || 'Direkt';
+        if (!sourceCounts.has(srcKey)) sourceCounts.set(srcKey, new Set());
+        sourceCounts.get(srcKey)!.add(ev.sid);
+      }
+
+      if (ev.type === 'page_view') pageViews++;
+      if (ev.type === 'view_content') {
+        viewContent++;
+        viewSessions.add(ev.sid);
+        if (ev.productId && productStats.has(ev.productId)) {
+          productStats.get(ev.productId)!.views++;
+        }
+      }
+      if (ev.type === 'add_to_cart') {
+        addToCart++;
+        cartSessions.add(ev.sid);
+        if (ev.productId && productStats.has(ev.productId)) {
+          productStats.get(ev.productId)!.carts++;
+        }
+      }
+      if (ev.type === 'initiate_checkout') {
+        initiateCheckout++;
+        checkoutSessions.add(ev.sid);
+        if (ev.productId && productStats.has(ev.productId)) {
+          productStats.get(ev.productId)!.checkouts++;
+        }
+      }
+    }
+
+    let revenueEur = 0;
+    for (const ord of paidOrders) {
+      const eur = Number((ord.totalCents / 100).toFixed(2));
+      revenueEur += eur;
+      for (const item of ord.items) {
+        const st = productStats.get(item.productId);
+        if (st) {
+          st.purchases += item.quantity;
+          st.revenueEur += Number(((item.unitAmountCents * item.quantity) / 100).toFixed(2));
+        }
+      }
+    }
+
+    const uniqueVisitors = uniqueSessionSet.size;
+    const paidCount = paidOrders.length;
+    const pct = (num: number, den: number) =>
+      den > 0 ? Number(((num / den) * 100).toFixed(1)) : 0;
+
+    // Last 14 days breakdown
+    const dailyMap = new Map<
+      string,
+      {
+        day: string;
+        visitorsSet: Set<string>;
+        pageViews: number;
+        carts: number;
+        checkouts: number;
+        orders: number;
+        revenueEur: number;
+      }
+    >();
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(now - i * 86400000).toISOString().slice(0, 10);
+      dailyMap.set(d, {
+        day: d,
+        visitorsSet: new Set(),
+        pageViews: 0,
+        carts: 0,
+        checkouts: 0,
+        orders: 0,
+        revenueEur: 0,
+      });
+    }
+    for (const ev of analyticsStore.events) {
+      const slot = dailyMap.get(ev.day);
+      if (!slot) continue;
+      if (ev.type !== 'purchase') slot.visitorsSet.add(ev.sid);
+      if (ev.type === 'page_view') slot.pageViews++;
+      if (ev.type === 'add_to_cart') slot.carts++;
+      if (ev.type === 'initiate_checkout') slot.checkouts++;
+    }
+    for (const ord of store.orders) {
+      if (ord.status !== 'paid') continue;
+      const d = (ord.paidAt ?? ord.createdAt).slice(0, 10);
+      const slot = dailyMap.get(d);
+      if (slot) {
+        slot.orders++;
+        slot.revenueEur = Number((slot.revenueEur + ord.totalCents / 100).toFixed(2));
+      }
+    }
+
+    const daily = Array.from(dailyMap.values()).map((d) => ({
+      day: d.day,
+      visitors: d.visitorsSet.size,
+      pageViews: d.pageViews,
+      carts: d.carts,
+      checkouts: d.checkouts,
+      orders: d.orders,
+      revenueEur: d.revenueEur,
+    }));
+
+    const sources = Array.from(sourceCounts.entries())
+      .map(([source, set]) => ({ source, visitors: set.size }))
+      .sort((a, b) => b.visitors - a.visitors);
+
+    res.json({
+      generatedAt: new Date().toISOString(),
+      rangeDays: daysParam || 'all',
+      kpis: {
+        uniqueVisitors,
+        pageViews,
+        viewContent,
+        addToCart,
+        initiateCheckout,
+        paidOrders: paidCount,
+        revenueEur: Number(revenueEur.toFixed(2)),
+        aovEur: paidCount > 0 ? Number((revenueEur / paidCount).toFixed(2)) : 0,
+        atcRatePct: pct(cartSessions.size || addToCart, Math.max(uniqueVisitors, 1)),
+        checkoutRatePct: pct(checkoutSessions.size || initiateCheckout, Math.max(uniqueVisitors, 1)),
+        conversionRatePct: pct(paidCount, Math.max(uniqueVisitors, 1)),
+      },
+      funnel: [
+        { step: 'Besucher', count: uniqueVisitors, pct: 100 },
+        {
+          step: 'Produkt angesehen',
+          count: viewSessions.size || viewContent,
+          pct: pct(viewSessions.size || viewContent, uniqueVisitors),
+        },
+        {
+          step: 'In den Warenkorb',
+          count: cartSessions.size || addToCart,
+          pct: pct(cartSessions.size || addToCart, uniqueVisitors),
+        },
+        {
+          step: 'Checkout gestartet',
+          count: checkoutSessions.size || initiateCheckout,
+          pct: pct(checkoutSessions.size || initiateCheckout, uniqueVisitors),
+        },
+        {
+          step: 'Kauf abgeschlossen',
+          count: paidCount,
+          pct: pct(paidCount, uniqueVisitors),
+        },
+      ],
+      devices: {
+        mobile: deviceSessions.mobile.size,
+        desktop: deviceSessions.desktop.size,
+      },
+      sources,
+      topProducts: Array.from(productStats.values()).sort(
+        (a, b) => b.revenueEur - a.revenueEur || b.carts - a.carts || b.views - a.views
+      ),
+      daily,
+      recentEvents: filteredEvents.slice(-25).reverse(),
+    });
+  });
+
+  app.post('/api/admin/analytics/reset', requireAdminAuth, (_req: Request, res: Response) => {
+    analyticsStore = { events: [] };
+    scheduleAnalyticsSave(true);
+    res.json({ ok: true });
+  });
+
+  app.post('/api/admin/products/reorder', requireAdminAuth, (req: Request, res: Response) => {
+    const body = req.body as { orderedIds?: unknown };
+    if (!Array.isArray(body.orderedIds)) {
+      res.status(400).json({ error: 'Ungültige Sortierliste.' });
+      return;
+    }
+    const byId = new Map(store.products.map((p) => [p.id, p]));
+    const next: JacketProduct[] = [];
+    for (const rawId of body.orderedIds) {
+      if (typeof rawId === 'string' && byId.has(rawId)) {
+        next.push(byId.get(rawId)!);
+        byId.delete(rawId);
+      }
+    }
+    for (const leftover of byId.values()) {
+      next.push(leftover);
+    }
+    store.products = next.map((p, i) => ({
+      ...p,
+      code: String(i + 1).padStart(2, '0'),
+    }));
+    persistStoreState();
+    res.json({ products: store.products });
+  });
+
   app.patch('/api/admin/products/:id', requireAdminAuth, (req: Request, res: Response) => {
     const { id } = req.params;
     const prod = store.products.find((p) => p.id === id);
@@ -1639,13 +2140,45 @@ async function startServer() {
       return;
     }
     const body = req.body as {
+      name?: unknown;
+      subtitle?: unknown;
+      leatherType?: unknown;
+      tagline?: unknown;
+      description?: unknown;
       priceEur?: unknown;
+      compareAtEur?: unknown;
       stockTotal?: unknown;
       active?: unknown;
+      gallery?: unknown;
+      colors?: unknown;
     };
 
+    if (typeof body.name === 'string' && body.name.trim().length >= 2) {
+      prod.name = body.name.trim().slice(0, 90);
+    }
+    if (typeof body.subtitle === 'string') {
+      prod.subtitle = body.subtitle.trim().slice(0, 120);
+    }
+    const validLeatherTypes = [
+      'Lamm-Nappa',
+      'Wildleder',
+      'Vollrind-Nappa',
+      'Rind-Wildleder',
+    ] as const;
+    if (validLeatherTypes.includes(body.leatherType as (typeof validLeatherTypes)[number])) {
+      prod.leatherType = body.leatherType as (typeof validLeatherTypes)[number];
+    }
+    if (typeof body.tagline === 'string') {
+      prod.tagline = body.tagline.trim().slice(0, 180);
+    }
+    if (typeof body.description === 'string') {
+      prod.description = body.description.trim().slice(0, 800);
+    }
     if (typeof body.priceEur === 'number' && Number.isFinite(body.priceEur)) {
-      prod.priceEur = Math.min(999, Math.max(49, Math.round(body.priceEur)));
+      prod.priceEur = Math.min(2999, Math.max(1, Math.round(body.priceEur)));
+    }
+    if (typeof body.compareAtEur === 'number' && Number.isFinite(body.compareAtEur)) {
+      prod.compareAtEur = Math.min(5999, Math.max(0, Math.round(body.compareAtEur)));
     }
     if (typeof body.stockTotal === 'number' && Number.isFinite(body.stockTotal)) {
       prod.stockTotal = Math.max(0, Math.round(body.stockTotal));
@@ -1653,9 +2186,44 @@ async function startServer() {
     if (typeof body.active === 'boolean') {
       prod.active = body.active;
     }
+    if (Array.isArray(body.gallery)) {
+      const cleanGallery = body.gallery
+        .filter((u): u is string => typeof u === 'string' && u.trim().length > 0)
+        .map((u) => u.trim().slice(0, 500));
+      if (cleanGallery.length > 0) {
+        prod.gallery = cleanGallery;
+      }
+    }
+    if (Array.isArray(body.colors)) {
+      const cleanColors = body.colors
+        .filter((c): c is Record<string, unknown> => Boolean(c && typeof c === 'object'))
+        .map((c, idx) => {
+          const cName =
+            typeof c.name === 'string' && c.name.trim()
+              ? c.name.trim().slice(0, 40)
+              : `Farbe ${idx + 1}`;
+          const cId =
+            typeof c.id === 'string' && c.id.trim()
+              ? c.id.trim().slice(0, 40)
+              : cName.toLowerCase().replace(/[^a-z0-9]+/g, '-') || `color-${idx + 1}`;
+          const cHex =
+            typeof c.hex === 'string' && /^#[0-9a-f]{6}$/i.test(c.hex.trim())
+              ? c.hex.trim()
+              : '#1B1C1E';
+          const cImg =
+            typeof c.image === 'string' && c.image.trim()
+              ? c.image.trim().slice(0, 500)
+              : prod.gallery[0] ?? '';
+          return { id: cId, name: cName, hex: cHex, image: cImg };
+        })
+        .filter((c) => c.image.length > 0);
+      if (cleanColors.length > 0) {
+        prod.colors = cleanColors;
+      }
+    }
 
     persistStoreState();
-    res.json({ products: store.products });
+    res.json({ product: prod, products: store.products });
   });
 
   app.post('/api/admin/products', requireAdminAuth, (req: Request, res: Response) => {
