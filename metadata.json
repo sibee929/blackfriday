@@ -1,0 +1,6 @@
+{
+  "name": "MRKSHI — Marokkanische Herren-Lederjacken",
+  "description": "100 % echtes Naturleder aus Marokko (Nappa, Wildleder, Rind) in kuratierten Signature-Farben. Maßgeschneiderte Herren-Lederjacken bis max. 177 € für Black Friday & Weihnachten.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
