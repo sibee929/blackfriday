@@ -11,6 +11,7 @@ import {
 } from '../data/jackets';
 import { optimizeProductImage } from '../data/catalog';
 import { MassCheckerModal, MassCheckerResult } from './MassCheckerModal';
+import { PaymentLogos } from './PaymentLogos';
 
 export interface ConfiguredOrderPayload {
   productId: string;
@@ -484,21 +485,7 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
 
           {/* Trusted Payment Partners & Post-Payment Bespoke + Direct Contact */}
           <div className="mt-4 pt-4 border-t border-black/15 space-y-2.5">
-            <div className="flex flex-wrap items-center gap-1.5">
-              {['KLARNA', 'PAYPAL', 'APPLE PAY', 'GOOGLE PAY', 'VISA / MC', 'SEPA'].map(
-                (partner) => (
-                  <span
-                    key={partner}
-                    className="px-2 py-1 border border-black/25 bg-white text-[10.5px] font-bold tracking-[0.08em] uppercase text-black"
-                  >
-                    {partner}
-                  </span>
-                )
-              )}
-              <span className="ml-auto text-[11px] font-bold uppercase tracking-[0.06em] text-black/75">
-                STRIPE KÄUFERSCHUTZ
-              </span>
-            </div>
+            <PaymentLogos size="md" showSecurityNote />
 
             <div className="flex flex-wrap items-center justify-between gap-2 text-[12px] font-semibold text-black/80">
               <span>✓ Sondermaß & Maßabgleich direkt nach Bezahlung möglich</span>

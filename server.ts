@@ -124,21 +124,31 @@ function loadStoreState(): StoreState {
     const parsed = JSON.parse(raw) as Partial<StoreState>;
     const defaults = createDefaultState();
 
-    // Merge latest media/colors/descriptions & unified 177 EUR / 354 EUR pricing from catalog while preserving admin-edited stock/active
-    const savedById = new Map(
-      (Array.isArray(parsed.products) ? parsed.products : []).map((p) => [p.id, p])
-    );
-    const mergedProducts = defaults.products.map((defProd) => {
+    // Merge latest media/colors/descriptions from catalog while preserving admin-edited price/stock/active and custom products
+    const savedList = Array.isArray(parsed.products) ? parsed.products : [];
+    const savedById = new Map(savedList.map((p) => [p.id, p]));
+    const defaultIds = new Set(defaults.products.map((p) => p.id));
+    const mergedDefaults = defaults.products.map((defProd) => {
       const saved = savedById.get(defProd.id);
       if (!saved) return defProd;
       return {
         ...defProd,
-        priceEur: 177,
-        compareAtEur: 354,
+        priceEur:
+          typeof saved.priceEur === 'number' && saved.priceEur >= 49 && saved.priceEur <= 999
+            ? saved.priceEur
+            : 177,
+        compareAtEur:
+          typeof saved.compareAtEur === 'number' && saved.compareAtEur > 0
+            ? saved.compareAtEur
+            : 354,
         stockTotal: typeof saved.stockTotal === 'number' ? saved.stockTotal : defProd.stockTotal,
         active: typeof saved.active === 'boolean' ? saved.active : defProd.active,
       };
     });
+    const customProducts = savedList.filter(
+      (p) => p && typeof p.id === 'string' && !defaultIds.has(p.id)
+    );
+    const mergedProducts = [...mergedDefaults, ...customProducts];
 
     const savedPixel = parsed.pixelConfig ?? ({} as Partial<PixelConfigState>);
     const resolvedPixelId =
@@ -824,8 +834,10 @@ async function startServer() {
 
     const whatsappNumber =
       typeof body.whatsappNumber === 'string' ? body.whatsappNumber.trim().slice(0, 32) : '';
-    if (whatsappNumber.replace(/[^\d]/g, '').length < 7) {
-      res.status(400).json({ error: 'Bitte eine gültige WhatsApp-Nummer eingeben.' });
+    if (whatsappNumber && whatsappNumber.replace(/[^\d]/g, '').length < 6) {
+      res.status(400).json({
+        error: 'Bitte eine gültige WhatsApp-Nummer eingeben oder das Feld leer lassen.',
+      });
       return;
     }
 
@@ -879,10 +891,10 @@ async function startServer() {
       const isAdminOneEuroTest = store.oneEuroTestProductId === product.id;
       if (isAdminOneEuroTest) includesOneEuroTest = true;
 
-      // Authoritative EUR price enforced server-side (max 177 EUR, or 1 EUR strictly when Admin 1-EUR Live Test is active)
+      // Authoritative EUR price enforced server-side (1 EUR strictly when Admin 1-EUR Live Test is active)
       const safePriceEur = isAdminOneEuroTest
         ? 1
-        : Math.min(177, Math.max(49, Math.round(product.priceEur)));
+        : Math.min(999, Math.max(49, Math.round(product.priceEur)));
 
       totalJacketQty += quantity;
       validatedLines.push({
@@ -915,12 +927,13 @@ async function startServer() {
       0
     );
 
-    // Upsell Bundle Discount (-20 EUR for 2+ jackets) + Loyalty Voucher (TREUE10 / MRKSHI10 -> -10 EUR)
+    // Upsell Bundle Discount (-20 EUR for 2+ jackets) + Loyalty Voucher (TREUE10 / MRKSHI10 / BLACKFRIDAY / VIP10 -> -10 EUR)
     const bundleDiscountCents = !includesOneEuroTest && totalJacketQty >= 2 ? 2000 : 0;
+    const VALID_VOUCHERS = new Set(['TREUE10', 'MRKSHI10', 'BLACKFRIDAY', 'VIP10']);
     const voucherValid =
       !includesOneEuroTest &&
       subtotalCents - bundleDiscountCents >= 4900 &&
-      (rawVoucher === 'TREUE10' || rawVoucher === 'MRKSHI10');
+      VALID_VOUCHERS.has(rawVoucher);
     const voucherDiscountCents = voucherValid ? 1000 : 0;
     const totalDiscountCents = bundleDiscountCents + voucherDiscountCents;
     const totalCents = Math.max(100, subtotalCents - totalDiscountCents);
@@ -974,15 +987,56 @@ async function startServer() {
 
     try {
       let stripeDiscounts: Array<{ coupon: string }> | undefined;
+      let fallbackInlineDiscountCents = 0;
       if (totalDiscountCents > 0) {
-        const coupon = await stripe.coupons.create({
-          amount_off: totalDiscountCents,
-          currency: 'eur',
-          duration: 'once',
-          name: discountLabels.join(' + ').slice(0, 40) || 'MRKSHI Atelier-Vorteil',
-        });
-        stripeDiscounts = [{ coupon: coupon.id }];
+        try {
+          const coupon = await stripe.coupons.create({
+            amount_off: totalDiscountCents,
+            currency: 'eur',
+            duration: 'once',
+            name: discountLabels.join(' + ').slice(0, 40) || 'MRKSHI Atelier-Vorteil',
+          });
+          stripeDiscounts = [{ coupon: coupon.id }];
+        } catch (couponErr) {
+          console.warn(
+            '[Stripe Coupon Fallback] Coupon konnte nicht erstellt werden, Rabatt wird direkt auf Artikel angewendet:',
+            couponErr instanceof Error ? couponErr.message : couponErr
+          );
+          fallbackInlineDiscountCents = totalDiscountCents;
+        }
       }
+
+      const lineItemsForStripe = validatedLines.map((line, index) => {
+        const detailsParts = [
+          `Farbe: ${line.colorName}`,
+          `Größe: ${line.sizeLabel}`,
+          line.customMeasure ? `Maß: ${line.customMeasure}` : null,
+          line.giftWrap ? 'Inkl. Weihnachts-Geschenkbox' : null,
+          fallbackInlineDiscountCents > 0 && index === 0 && discountLabels.length > 0
+            ? `Rabatt abgezogen: ${discountLabels.join(' + ')}`
+            : null,
+        ].filter(Boolean);
+
+        let unitAmount = line.unitAmountCents;
+        if (fallbackInlineDiscountCents > 0 && index === 0) {
+          const maxDeductiblePerUnit = Math.floor(fallbackInlineDiscountCents / line.quantity);
+          const actualDeduct = Math.min(Math.max(0, unitAmount - 100), maxDeductiblePerUnit);
+          unitAmount -= actualDeduct;
+          fallbackInlineDiscountCents -= actualDeduct * line.quantity;
+        }
+
+        return {
+          quantity: line.quantity,
+          price_data: {
+            currency: 'eur',
+            unit_amount: unitAmount,
+            product_data: {
+              name: `${line.name} — ${line.colorName}`,
+              description: detailsParts.join(' · ') || 'MRKSHI Marokko Naturleder',
+            },
+          },
+        };
+      });
 
       const session = await stripe.checkout.sessions.create({
         mode: 'payment',
@@ -998,30 +1052,11 @@ async function startServer() {
         ...(stripeDiscounts
           ? { discounts: stripeDiscounts }
           : { allow_promotion_codes: true }),
-        line_items: validatedLines.map((line) => {
-          const detailsParts = [
-            `Farbe: ${line.colorName}`,
-            `Größe: ${line.sizeLabel}`,
-            line.customMeasure ? `Maß: ${line.customMeasure}` : null,
-            line.giftWrap ? 'Inkl. Weihnachts-Geschenkbox' : null,
-          ].filter(Boolean);
-
-          return {
-            quantity: line.quantity,
-            price_data: {
-              currency: 'eur',
-              unit_amount: line.unitAmountCents,
-              product_data: {
-                name: `${line.name} — ${line.colorName}`,
-                description: detailsParts.join(' · ') || 'MRKSHI Marokko Naturleder',
-              },
-            },
-          };
-        }),
+        line_items: lineItemsForStripe,
         metadata: {
           origin: 'MRKSHI_DE_STOREFRONT',
           orderId,
-          whatsappNumber,
+          whatsappNumber: whatsappNumber || 'via Stripe Checkout',
           measurementsSummary: measurementsSummary.slice(0, 450),
           giftNote: giftNote.slice(0, 300),
           discountsApplied: discountLabels.join(', '),
@@ -1064,9 +1099,14 @@ async function startServer() {
         currency: 'EUR',
       });
     } catch (err) {
-      const message =
+      console.error('[Stripe Checkout Error]', err);
+      const rawMessage =
         err instanceof Error ? err.message : 'Stripe Checkout konnte nicht erstellt werden.';
-      res.status(502).json({ error: message });
+      const friendlyMessage = rawMessage.toLowerCase().includes('invalid api key')
+        ? 'Stripe API-Schlüssel (STRIPE_SECRET_KEY) ist ungültig. Bitte im Server .env prüfen.'
+        : rawMessage;
+      // Return HTTP 400 (never 502) so Cloudflare never replaces the JSON payload with an HTML 502 page
+      res.status(400).json({ error: friendlyMessage });
     }
   });
 
@@ -1431,7 +1471,7 @@ async function startServer() {
     };
 
     if (typeof body.priceEur === 'number' && Number.isFinite(body.priceEur)) {
-      prod.priceEur = Math.min(177, Math.max(49, Math.round(body.priceEur)));
+      prod.priceEur = Math.min(999, Math.max(49, Math.round(body.priceEur)));
     }
     if (typeof body.stockTotal === 'number' && Number.isFinite(body.stockTotal)) {
       prod.stockTotal = Math.max(0, Math.round(body.stockTotal));
@@ -1440,6 +1480,128 @@ async function startServer() {
       prod.active = body.active;
     }
 
+    persistStoreState();
+    res.json({ products: store.products });
+  });
+
+  app.post('/api/admin/products', requireAdminAuth, (req: Request, res: Response) => {
+    const body = req.body as {
+      name?: unknown;
+      subtitle?: unknown;
+      leatherType?: unknown;
+      priceEur?: unknown;
+      compareAtEur?: unknown;
+      tagline?: unknown;
+      description?: unknown;
+      colorName?: unknown;
+      colorHex?: unknown;
+      imageUrl?: unknown;
+      stockTotal?: unknown;
+    };
+
+    const name = typeof body.name === 'string' ? body.name.trim().slice(0, 80) : '';
+    if (name.length < 2) {
+      res.status(400).json({ error: 'Bitte einen gültigen Produktnamen eingeben.' });
+      return;
+    }
+
+    const slugBase = name
+      .toLowerCase()
+      .replace(/ä/g, 'ae')
+      .replace(/ö/g, 'oe')
+      .replace(/ü/g, 'ue')
+      .replace(/ß/g, 'ss')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || `modell-${Date.now()}`;
+
+    const id = store.products.some((p) => p.id === slugBase)
+      ? `${slugBase}-${Date.now().toString(36).slice(-4)}`
+      : slugBase;
+
+    const validLeatherTypes = [
+      'Lamm-Nappa',
+      'Wildleder',
+      'Vollrind-Nappa',
+      'Rind-Wildleder',
+    ] as const;
+    const leatherType = validLeatherTypes.includes(body.leatherType as (typeof validLeatherTypes)[number])
+      ? (body.leatherType as (typeof validLeatherTypes)[number])
+      : 'Lamm-Nappa';
+
+    const priceEur =
+      typeof body.priceEur === 'number' && Number.isFinite(body.priceEur)
+        ? Math.min(999, Math.max(49, Math.round(body.priceEur)))
+        : 177;
+    const compareAtEur =
+      typeof body.compareAtEur === 'number' && Number.isFinite(body.compareAtEur)
+        ? Math.max(priceEur, Math.round(body.compareAtEur))
+        : priceEur * 2;
+    const stockTotal =
+      typeof body.stockTotal === 'number' && Number.isFinite(body.stockTotal)
+        ? Math.max(0, Math.round(body.stockTotal))
+        : 50;
+
+    const colorName =
+      typeof body.colorName === 'string' && body.colorName.trim()
+        ? body.colorName.trim().slice(0, 40)
+        : 'Bleu Petrol';
+    const colorHex =
+      typeof body.colorHex === 'string' && /^#[0-9a-f]{6}$/i.test(body.colorHex.trim())
+        ? body.colorHex.trim()
+        : '#1B1C1E';
+    const imageUrl =
+      typeof body.imageUrl === 'string' && body.imageUrl.trim()
+        ? body.imageUrl.trim().slice(0, 500)
+        : '/assets/aistudio/CA15DAC8-4245-4F0F-981D-ED38CFB17326_e15622ac.png';
+
+    const nextCode = String(store.products.length + 1).padStart(2, '0');
+    const newProduct: JacketProduct = {
+      id,
+      code: nextCode,
+      name,
+      subtitle:
+        typeof body.subtitle === 'string' && body.subtitle.trim()
+          ? body.subtitle.trim().slice(0, 100)
+          : `${leatherType} Atelier-Edition`,
+      leatherType,
+      priceEur,
+      compareAtEur,
+      madPrice: Math.round(priceEur * 11),
+      tagline:
+        typeof body.tagline === 'string' && body.tagline.trim()
+          ? body.tagline.trim().slice(0, 140)
+          : 'Handgefertigt im Familienatelier in Marrakesch — 100 % Naturleder.',
+      description:
+        typeof body.description === 'string' && body.description.trim()
+          ? body.description.trim().slice(0, 500)
+          : 'Vollnarbiges Naturleder direkt ab Manufaktur inkl. kostenlosem DHL Express Versand.',
+      sizes: ['S', 'M', 'L', 'XL', '2XL', '3XL'],
+      colors: [
+        {
+          id: colorName.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'standard',
+          name: colorName,
+          hex: colorHex,
+          image: imageUrl,
+        },
+      ],
+      gallery: [imageUrl],
+      stockTotal,
+      active: true,
+      tags: ['leather', 'new'],
+    };
+
+    store.products.push(newProduct);
+    persistStoreState();
+    res.json({ product: newProduct, products: store.products });
+  });
+
+  app.delete('/api/admin/products/:id', requireAdminAuth, (req: Request, res: Response) => {
+    const idx = store.products.findIndex((p) => p.id === req.params.id);
+    if (idx === -1) {
+      res.status(404).json({ error: 'Produkt nicht gefunden.' });
+      return;
+    }
+    store.products.splice(idx, 1);
     persistStoreState();
     res.json({ products: store.products });
   });

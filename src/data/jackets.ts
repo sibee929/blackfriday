@@ -248,7 +248,7 @@ export async function createTransparentCutout(src: string): Promise<string> {
     img.decoding = 'async';
     img.onload = () => {
       try {
-        const maxDim = 960;
+        const maxDim = 760;
         const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
         const w = Math.max(1, Math.round(img.naturalWidth * scale));
         const h = Math.max(1, Math.round(img.naturalHeight * scale));

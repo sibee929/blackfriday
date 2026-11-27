@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { JacketProduct, optimizeProductImage } from '../data/catalog';
 import { MassCheckerModal, MassCheckerResult } from './MassCheckerModal';
+import { PaymentLogos } from './PaymentLogos';
 
 export interface CartColorInfo {
   id: string;
@@ -120,15 +121,26 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const careKitEur = upsellCareKit ? 14 : 0;
   const bundleDiscountEur = !hasOneEuroItem && totalJacketQty >= 2 ? 20 : 0;
   const cleanVoucher = voucherInput.trim().toUpperCase();
+  const VALID_CODES = ['TREUE10', 'MRKSHI10', 'BLACKFRIDAY', 'VIP10'];
   const voucherValid =
     !hasOneEuroItem &&
     itemsSubtotalEur + careKitEur - bundleDiscountEur >= 49 &&
-    (cleanVoucher === 'TREUE10' || cleanVoucher === 'MRKSHI10');
+    VALID_CODES.includes(cleanVoucher);
+  const voucherInvalidTyped = cleanVoucher.length >= 3 && !voucherValid;
   const voucherDiscountEur = voucherValid ? 10 : 0;
   const finalTotalEur = Math.max(
     1,
     itemsSubtotalEur + careKitEur - bundleDiscountEur - voucherDiscountEur
   );
+  const compareAtTotalEur = items.reduce(
+    (sum, i) => sum + (i.priceEur > 1 ? i.priceEur * 2 : i.priceEur) * i.quantity,
+    0
+  );
+  const totalSavingsEur = Math.max(
+    0,
+    compareAtTotalEur - itemsSubtotalEur + bundleDiscountEur + voucherDiscountEur
+  );
+  const freeShippingProgress = 100;
 
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -142,9 +154,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
       return;
     }
 
-    const digitsOnly = cleanWhatsapp.replace(/[^\d+]/g, '');
-    if (digitsOnly.length < 7) {
-      setErrorMsg('Bitte gib deine WhatsApp-Nummer für den Maß-Check & DHL-Versand an.');
+    const digitsOnly = cleanWhatsapp.replace(/[^\d]/g, '');
+    if (cleanWhatsapp && digitsOnly.length < 6) {
+      setErrorMsg('Bitte eine gültige WhatsApp-Nummer eingeben oder das Feld leer lassen.');
       return;
     }
 
@@ -178,9 +190,18 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
         }),
       });
 
-      const data = (await res.json()) as CheckoutApiResponse;
+      const rawText = await res.text();
+      let data: CheckoutApiResponse = {};
+      try {
+        data = JSON.parse(rawText) as CheckoutApiResponse;
+      } catch {
+        setErrorMsg(
+          `Server-Antwort ungültig (HTTP ${res.status}). Bitte in 10 Sekunden erneut versuchen oder per WhatsApp bestellen.`
+        );
+        return;
+      }
       if (!res.ok) {
-        setErrorMsg(data.error ?? 'Checkout konnte nicht gestartet werden.');
+        setErrorMsg(data.error ?? `Checkout konnte nicht gestartet werden (HTTP ${res.status}).`);
         return;
       }
 
@@ -204,8 +225,11 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
             'Stripe-Vorschau aktiv. Mit Klick unten wird die Bestellung inkl. n8n & Telegram-Alert abgeschlossen.',
         });
       }
-    } catch {
-      setErrorMsg('Verbindungsfehler zum Server. Bitte erneut versuchen.');
+    } catch (err) {
+      console.error('[Checkout] network error', err);
+      setErrorMsg(
+        'Keine Verbindung zum Server. Bitte Internet prüfen und erneut auf „Jetzt sicher bezahlen“ tippen.'
+      );
     } finally {
       setLoading(false);
     }
@@ -410,11 +434,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 <label className="block">
                   <span className="block text-[12px] font-medium text-[#000000] mb-1 flex items-center gap-1.5">
                     <MessageCircle className="w-3.5 h-3.5 text-[#126E35]" />
-                    <span>WhatsApp-Nummer (für Passform & DHL Tracking) *</span>
+                    <span>WhatsApp (optional · für Passform & DHL Tracking)</span>
                   </span>
                   <input
                     type="tel"
-                    required
                     placeholder="+49 176 12345678"
                     value={whatsappNumber}
                     onChange={(e) => setWhatsappNumber(e.target.value)}
@@ -522,37 +545,68 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 </label>
               </div>
 
-              {/* Loyalty Voucher Code (TREUE10) */}
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1">
-                  <Tag className="w-3.5 h-3.5 text-black/60 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    placeholder="Gutschein-Code (z. B. TREUE10)"
-                    value={voucherInput}
-                    onChange={(e) => {
-                      const v = e.target.value.toUpperCase();
-                      setVoucherInput(v);
-                      onVoucherChange(v);
-                    }}
-                    className="w-full h-9 pl-8 pr-3 border border-black/30 bg-white font-mono text-[12px] font-bold uppercase text-black"
-                  />
+              {/* Voucher Code Field with live validation */}
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Tag className="w-3.5 h-3.5 text-black/60 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Gutscheincode eingeben"
+                      value={voucherInput}
+                      onChange={(e) => {
+                        const v = e.target.value.toUpperCase().replace(/\s+/g, '');
+                        setVoucherInput(v);
+                        onVoucherChange(v);
+                      }}
+                      className={`w-full h-10 pl-8 pr-3 rounded-lg bg-white font-mono text-[12.5px] font-bold uppercase text-black outline-none transition-colors ${
+                        voucherValid
+                          ? 'border-2 border-[#16A34A] bg-[#F0FDF4]'
+                          : voucherInvalidTyped
+                          ? 'border-2 border-[#DC2626]'
+                          : 'border border-black/25 focus:border-black'
+                      }`}
+                    />
+                  </div>
+                  {voucherValid ? (
+                    <span className="h-10 px-3 rounded-lg bg-[#16A34A] text-white text-[11.5px] font-bold uppercase inline-flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      -10 €
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVoucherInput('TREUE10');
+                        onVoucherChange('TREUE10');
+                      }}
+                      className="h-10 px-3 rounded-lg bg-black text-white text-[11.5px] font-bold uppercase hover:bg-neutral-800 transition-colors cursor-pointer"
+                    >
+                      Einlösen
+                    </button>
+                  )}
                 </div>
-                {voucherValid ? (
-                  <span className="h-9 px-3 bg-black text-white text-[11px] font-bold uppercase inline-flex items-center">
-                    -10,00 € AKTIV
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setVoucherInput('TREUE10');
-                      onVoucherChange('TREUE10');
-                    }}
-                    className="h-9 px-3 border border-black text-black text-[11px] font-bold uppercase hover:bg-black hover:text-white transition-colors cursor-pointer"
-                  >
-                    TREUE10 (-10 €)
-                  </button>
+                {voucherInvalidTyped && (
+                  <p className="text-[11.5px] font-semibold text-[#DC2626]">
+                    Code ungültig. Probiere <strong>TREUE10</strong> oder <strong>BLACKFRIDAY</strong>.
+                  </p>
+                )}
+                {!voucherValid && !voucherInvalidTyped && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {['TREUE10', 'BLACKFRIDAY'].map((code) => (
+                      <button
+                        key={code}
+                        type="button"
+                        onClick={() => {
+                          setVoucherInput(code);
+                          onVoucherChange(code);
+                        }}
+                        className="px-2 py-1 rounded-md border border-dashed border-[#DC2626] bg-[#FEF2F2] text-[#B91C1C] font-mono text-[11px] font-bold cursor-pointer hover:bg-[#FEE2E2]"
+                      >
+                        {code} · -10 €
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
             </div>
@@ -605,63 +659,82 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
         {/* Footer Summary */}
         {items.length > 0 && (
-          <div className="px-6 py-4 border-t border-black/15 bg-white space-y-2.5">
-            <div className="flex items-center justify-between text-[13px] font-medium text-black/75">
-              <span>Haustür-Lieferung DHL Express (DE / AT / CH)</span>
-              <span className="font-bold text-black uppercase">0,00 € Kostenlos</span>
+          <div className="px-6 py-4 border-t border-black/10 bg-[#FAFAFA] space-y-2.5">
+            {/* Free shipping progress */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-[12px] font-bold text-[#166534]">
+                <span>🚚 Gratis DHL Express Versand freigeschaltet</span>
+                <span>0,00 €</span>
+              </div>
+              <div className="h-1.5 rounded-full bg-[#DCFCE7] overflow-hidden">
+                <div
+                  className="h-full bg-[#16A34A] rounded-full"
+                  style={{ width: `${freeShippingProgress}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between text-[13px] text-black/70 tabular-nums">
+              <span>Zwischensumme</span>
+              <span>{(itemsSubtotalEur + careKitEur).toFixed(2).replace('.', ',')} €</span>
             </div>
 
             {bundleDiscountEur > 0 && (
-              <div className="flex items-center justify-between text-[13px] font-bold text-black tabular-nums">
+              <div className="flex items-center justify-between text-[13px] font-bold text-[#16A34A] tabular-nums">
                 <span>2-Jacken Kombi-Vorteil</span>
                 <span>-{bundleDiscountEur},00 €</span>
               </div>
             )}
 
             {voucherDiscountEur > 0 && (
-              <div className="flex items-center justify-between text-[13px] font-bold text-black tabular-nums">
-                <span>Treue-Gutschein ({cleanVoucher})</span>
+              <div className="flex items-center justify-between text-[13px] font-bold text-[#16A34A] tabular-nums">
+                <span>Gutschein ({cleanVoucher})</span>
                 <span>-{voucherDiscountEur},00 €</span>
               </div>
             )}
 
-            <div className="flex items-center justify-between text-[16px] font-bold text-black tabular-nums">
-              <span>Gesamtsumme (inkl. MwSt.)</span>
-              <span>{finalTotalEur.toFixed(2).replace('.', ',')} €</span>
+            <div className="flex items-end justify-between pt-1.5 border-t border-black/10 tabular-nums">
+              <div>
+                <span className="block text-[16px] font-bold text-black">Gesamt</span>
+                <span className="text-[11px] text-black/55">inkl. MwSt. · Versand 0 €</span>
+              </div>
+              <div className="text-right">
+                {totalSavingsEur > 0 && (
+                  <span className="block text-[12px] text-black/45 line-through">
+                    {(finalTotalEur + totalSavingsEur).toFixed(2).replace('.', ',')} €
+                  </span>
+                )}
+                <span className="text-[22px] font-bold text-black">
+                  {finalTotalEur.toFixed(2).replace('.', ',')} €
+                </span>
+              </div>
             </div>
+
+            {totalSavingsEur > 0 && (
+              <div className="text-center text-[12px] font-bold text-white bg-[#DC2626] rounded-md py-1.5">
+                🔥 Du sparst heute {totalSavingsEur.toFixed(2).replace('.', ',')} €
+              </div>
+            )}
 
             <button
               type="submit"
               form="stripe-checkout-form"
               disabled={loading}
-              className="w-full h-[48px] px-5 bg-black text-white text-[14px] font-bold uppercase tracking-[0.06em] hover:bg-neutral-800 disabled:opacity-50 transition-colors inline-flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full h-[54px] px-5 rounded-xl bg-[#16A34A] text-white text-[15px] font-bold uppercase tracking-[0.05em] hover:bg-[#15803D] active:scale-[0.99] disabled:opacity-60 transition-all inline-flex items-center justify-center gap-2 cursor-pointer shadow-[0_6px_18px_rgba(22,163,74,0.35)]"
             >
               <Lock className="w-4 h-4" />
               <span>
                 {loading
-                  ? 'Stripe Checkout wird geöffnet…'
-                  : `Jetzt sicher bezahlen — ${finalTotalEur.toFixed(2).replace('.', ',')} €`}
+                  ? 'Sichere Kasse wird geöffnet…'
+                  : `Jetzt sicher bezahlen · ${finalTotalEur.toFixed(2).replace('.', ',')} €`}
               </span>
             </button>
 
-            <div className="flex flex-wrap items-center justify-center gap-1 pt-0.5">
-              {['APPLE PAY', 'KLARNA', 'PAYPAL', 'GOOGLE PAY', 'VISA / MC', 'SEPA'].map(
-                (partner) => (
-                  <span
-                    key={partner}
-                    className="px-1.5 py-0.5 border border-black/25 text-[9.5px] font-bold tracking-[0.07em] uppercase text-black"
-                  >
-                    {partner}
-                  </span>
-                )
-              )}
-            </div>
+            <PaymentLogos size="sm" showSecurityNote />
 
-            <p className="text-[11px] font-medium text-center text-black/75 flex items-center justify-center gap-1.5">
+            <p className="text-[11px] font-medium text-center text-black/65 flex items-center justify-center gap-1.5">
               <ShieldCheck className="w-3.5 h-3.5 shrink-0 text-black" />
-              <span>
-                Sondermaß & Direktkontakt auch direkt nach Bezahlung · Stripe Käuferschutz
-              </span>
+              <span>14 Tage Rückgabe · Klarna: Jetzt kaufen, später bezahlen</span>
             </p>
           </div>
         )}

@@ -1,8 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   createTransparentCutout,
   KHABIBI_COLORS,
-  KhabibiColorVariant,
 } from '../data/jackets';
 
 interface HeroTryOnProps {
@@ -14,42 +13,16 @@ interface HeroTryOnProps {
   onScrollToCollection: () => void;
 }
 
-const COVER_TABLE: [number, number][] = [
-  [0, 0],
-  [0.031, 0.006],
-  [0.134, 0.012],
-  [0.206, 0.023],
-  [0.278, 0.047],
-  [0.34, 0.07],
-  [0.412, 0.105],
-  [0.485, 0.158],
-  [0.546, 0.246],
-  [0.583, 0.55],
-  [0.62, 0.825],
-  [0.69, 0.9],
-  [0.79, 0.94],
-  [0.85, 0.956],
-  [0.93, 0.975],
-  [1, 1],
-];
-
-function sampleCover(t: number): number {
-  const clamped = Math.max(0, Math.min(1, t));
-  for (let i = 0; i < COVER_TABLE.length - 1; i++) {
-    const [t0, c0] = COVER_TABLE[i];
-    const [t1, c1] = COVER_TABLE[i + 1];
-    if (clamped >= t0 && clamped <= t1) {
-      const k = (clamped - t0) / (t1 - t0 || 1);
-      const smooth = 3 * k * k - 2 * k * k * k;
-      return c0 + (c1 - c0) * smooth;
-    }
-  }
-  return 1;
+/** Smooth, continuous easeInOutQuart curve (no jerky mid-transition snaps) */
+function easeInOutQuart(t: number): number {
+  const c = Math.max(0, Math.min(1, t));
+  return c < 0.5 ? 8 * c * c * c * c : 1 - Math.pow(-2 * c + 2, 4) / 2;
 }
 
-function easeOutQuad(x: number): number {
-  const c = Math.max(0, Math.min(1, x));
-  return 1 - (1 - c) * (1 - c);
+/** Silky deceleration for incoming hero layers */
+function easeOutQuint(t: number): number {
+  const c = Math.max(0, Math.min(1, t));
+  return 1 - Math.pow(1 - c, 5);
 }
 
 function mod(n: number, m: number): number {
@@ -136,38 +109,56 @@ export const HeroTryOn: React.FC<HeroTryOnProps> = ({
 
   const activeIdxRef = useRef<number>(externalIdx);
   const isTransitioningRef = useRef<boolean>(false);
+  const queuedTargetRef = useRef<{ idx: number; dir: 1 | -1; source: 'hero' | 'autoplay' } | null>(null);
+  const rafIdRef = useRef<number | null>(null);
   const lastInteractionRef = useRef<number>(0);
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
-  const wheelAccRef = useRef<number>(0);
-  const wheelDirRef = useRef<number>(0);
-  const wheelTimerRef = useRef<number | null>(null);
-  const lastWheelStepRef = useRef<number>(0);
 
   const prefersReducedMotion = useMemo(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return false;
     return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }, []);
 
-  // Build crisp transparent cutouts for all 5 Model Khabibi front packshots
+  // Build crisp transparent cutouts progressively (active slide first, rest staggered in idle frames)
+  // so the opening hero motion never stutters on the main thread.
   useEffect(() => {
     let alive = true;
-    Promise.all(
-      variants.map(async (v) => {
-        const url = await createTransparentCutout(v.frontImage);
-        return [v.id, url] as const;
-      })
-    ).then((pairs) => {
-      if (!alive) return;
-      const map: Record<string, string> = {};
-      for (const [id, url] of pairs) map[id] = url;
-      setCutouts(map);
+    const scheduleIdle = (fn: () => void, delayMs: number) => {
+      const w = window as Window & {
+        requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      };
+      if (typeof w.requestIdleCallback === 'function') {
+        w.requestIdleCallback(fn, { timeout: delayMs + 400 });
+      } else {
+        w.setTimeout(fn, delayMs);
+      }
+    };
+
+    const first = variants[activeIdxRef.current] ?? variants[0];
+    if (first) {
+      createTransparentCutout(first.frontImage).then((url) => {
+        if (!alive) return;
+        setCutouts((prev) => ({ ...prev, [first.id]: url }));
+      });
+    }
+
+    const others = variants.filter((v) => v.id !== first?.id);
+    others.forEach((v, i) => {
+      scheduleIdle(() => {
+        if (!alive) return;
+        createTransparentCutout(v.frontImage).then((url) => {
+          if (!alive) return;
+          setCutouts((prev) => ({ ...prev, [v.id]: url }));
+        });
+      }, 280 + i * 240);
     });
+
     return () => {
       alive = false;
     };
   }, [variants]);
 
-  // Responsive Blendy --u and --n scaling + canvas word measurements
+  // Responsive --u and --n scaling + canvas word measurements
   const measureScene = useCallback(() => {
     if (typeof window === 'undefined') return;
     const vw = window.innerWidth;
@@ -200,8 +191,16 @@ export const HeroTryOn: React.FC<HeroTryOnProps> = ({
     if (document.fonts?.ready) {
       document.fonts.ready.then(measureScene);
     }
-    window.addEventListener('resize', measureScene);
-    return () => window.removeEventListener('resize', measureScene);
+    let resizeRaf = 0;
+    const onResize = () => {
+      cancelAnimationFrame(resizeRaf);
+      resizeRaf = requestAnimationFrame(measureScene);
+    };
+    window.addEventListener('resize', onResize, { passive: true });
+    return () => {
+      cancelAnimationFrame(resizeRaf);
+      window.removeEventListener('resize', onResize);
+    };
   }, [measureScene]);
 
   // Update sliding tab underline
@@ -217,11 +216,11 @@ export const HeroTryOn: React.FC<HeroTryOnProps> = ({
 
   useEffect(() => {
     syncUnderline(activeIdx);
-    const t = window.setTimeout(() => syncUnderline(activeIdx), 120);
+    const t = window.setTimeout(() => syncUnderline(activeIdx), 100);
     return () => window.clearTimeout(t);
   }, [activeIdx, isMobile, navUnitPx, syncUnderline]);
 
-  // Opening sequence (Section 8)
+  // Clean GPU-accelerated opening entrance
   useEffect(() => {
     if (prefersReducedMotion) {
       setRevealed(true);
@@ -231,26 +230,36 @@ export const HeroTryOn: React.FC<HeroTryOnProps> = ({
     let cancelled = false;
     const startOpening = () => {
       if (cancelled) return;
-      const frameW = 1440 * (window.innerWidth <= 820 || window.innerHeight > window.innerWidth
-        ? Math.min(window.innerWidth / 640, (window.innerHeight - 200) / 620)
-        : Math.min(window.innerWidth / 1440, window.innerHeight / 900));
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const frameW =
+        1440 *
+        (vw <= 820 || vh > vw
+          ? Math.min(vw / 640, (vh - 200) / 620)
+          : Math.min(vw / 1440, vh / 900));
 
-      const layers = layerRefs.current[0];
-      const ease = 'cubic-bezier(0.22, 0.8, 0.3, 1)';
+      const layers = layerRefs.current[activeIdxRef.current];
+      const ease = 'cubic-bezier(0.16, 1, 0.3, 1)';
       if (layers) {
-        const specs: Array<[HTMLDivElement | null, number]> = [
-          [layers.word, 0.4],
-          [layers.shadow, 0.3],
-          [layers.jacket, 0.15],
-          [layers.accent, 0.55],
+        const specs: Array<[HTMLDivElement | null, number, number]> = [
+          [layers.word, 0.18, 0.98],
+          [layers.shadow, 0.12, 0.94],
+          [layers.jacket, 0.08, 0.96],
+          [layers.accent, 0.22, 1],
         ];
-        specs.forEach(([el, factor]) => {
+        specs.forEach(([el, factor, startScale]) => {
           el?.animate(
             [
-              { transform: `translateX(${factor * frameW}px)` },
-              { transform: 'translateX(0px)' },
+              {
+                opacity: 0,
+                transform: `translate3d(${factor * frameW}px, 0, 0) scale(${startScale})`,
+              },
+              {
+                opacity: 1,
+                transform: 'translate3d(0px, 0, 0) scale(1)',
+              },
             ],
-            { duration: 900, easing: ease, fill: 'both' }
+            { duration: 780, easing: ease, fill: 'both' }
           );
         });
       }
@@ -262,27 +271,41 @@ export const HeroTryOn: React.FC<HeroTryOnProps> = ({
         requestAnimationFrame(startOpening);
       });
     } else {
-      startOpening();
+      requestAnimationFrame(startOpening);
     }
 
-    const failsafe = window.setTimeout(() => setRevealed(true), 2400);
+    const failsafe = window.setTimeout(() => setRevealed(true), 1200);
     return () => {
       cancelled = true;
       window.clearTimeout(failsafe);
     };
   }, [prefersReducedMotion]);
 
+  useEffect(() => {
+    return () => {
+      if (rafIdRef.current !== null) cancelAnimationFrame(rafIdRef.current);
+    };
+  }, []);
+
   const goToSlide = useCallback(
     (targetIdx: number, explicitDir?: 1 | -1, source: 'hero' | 'autoplay' = 'hero') => {
       const fromIdx = activeIdxRef.current;
-      if (targetIdx === fromIdx || isTransitioningRef.current) return;
+      if (targetIdx === fromIdx) return;
 
       const dir: 1 | -1 = explicitDir ?? (targetIdx > fromIdx ? 1 : -1);
+
+      if (isTransitioningRef.current) {
+        // Queue the latest user selection so rapid clicks feel responsive
+        if (source === 'hero') {
+          queuedTargetRef.current = { idx: targetIdx, dir, source };
+        }
+        return;
+      }
 
       if (prefersReducedMotion) {
         activeIdxRef.current = targetIdx;
         setActiveIdx(targetIdx);
-        onSelectColor(variants[targetIdx].id, source);
+        startTransition(() => onSelectColor(variants[targetIdx].id, source));
         return;
       }
 
@@ -299,64 +322,74 @@ export const HeroTryOn: React.FC<HeroTryOnProps> = ({
         return;
       }
 
-      // Update active UI & tab underline immediately as wipe starts
+      // Sync tab underline immediately; defer heavy parent re-render to avoid frame drop on frame 1
       activeIdxRef.current = targetIdx;
-      setActiveIdx(targetIdx);
-      onSelectColor(variants[targetIdx].id, source);
+      syncUnderline(targetIdx);
 
-      // Prepare B underneath A
+      // Prepare B smoothly underneath A
       slideA.style.visibility = 'visible';
       slideA.style.zIndex = '2';
+      slideA.style.willChange = 'clip-path';
       slideB.style.visibility = 'visible';
       slideB.style.zIndex = '1';
       slideB.style.clipPath = 'none';
 
       const frameW = 1440 * unitPx;
       const factors = {
-        word: 0.4,
-        shadow: 0.3,
-        jacket: 0.15,
-        accent: 0.55,
+        word: 0.24,
+        shadow: 0.16,
+        jacket: 0.1,
+        accent: 0.3,
       } as const;
 
       const startTime = performance.now();
-      const wipeDuration = 970;
+      const wipeDuration = 680;
 
       const step = (now: number) => {
-        const t = (now - startTime) / wipeDuration;
-        const c = sampleCover(t);
+        const rawT = Math.min(1, (now - startTime) / wipeDuration);
+        const c = easeInOutQuart(rawT);
 
-        // Cover outgoing slide A from right-to-left (dir=+1) or left-to-right (dir=-1)
+        // Smooth edge-to-edge panel wipe
+        const insetPct = (c * 100).toFixed(3);
         if (dir === 1) {
-          slideA.style.clipPath = `inset(0 ${c * 100}% 0 0)`;
+          slideA.style.clipPath = `inset(0 ${insetPct}% 0 0)`;
         } else {
-          slideA.style.clipPath = `inset(0 0 0 ${c * 100}%)`;
+          slideA.style.clipPath = `inset(0 0 0 ${insetPct}%)`;
         }
 
-        // Slide A drifts away
-        const driftX = -dir * c * 0.14 * frameW;
-        if (layersA.word) layersA.word.style.transform = `translateX(${driftX}px)`;
-        if (layersA.shadow) layersA.shadow.style.transform = `translateX(${driftX}px)`;
-        if (layersA.jacket) layersA.jacket.style.transform = `translateX(${driftX}px)`;
-        if (layersA.accent) layersA.accent.style.transform = `translateX(${driftX}px)`;
+        // Outgoing slide A drifts softly with subtle depth scale
+        const driftX = (-dir * c * 0.1 * frameW).toFixed(2);
+        const outScale = (1 - c * 0.025).toFixed(4);
+        if (layersA.word) layersA.word.style.transform = `translate3d(${driftX}px, 0, 0)`;
+        if (layersA.shadow) layersA.shadow.style.transform = `translate3d(${driftX}px, 0, 0)`;
+        if (layersA.jacket) {
+          layersA.jacket.style.transform = `translate3d(${driftX}px, 0, 0) scale(${outScale})`;
+        }
+        if (layersA.accent) layersA.accent.style.transform = `translate3d(${driftX}px, 0, 0)`;
 
-        // Slide B arrives with parallax
-        const k = easeOutQuad(Math.max(0, Math.min(1, (t - 0.5) / 0.42)));
+        // Incoming slide B glides in with silky parallax & subtle settle
+        const k = easeOutQuint(Math.max(0, Math.min(1, (rawT - 0.16) / 0.84)));
+        const inScale = (0.97 + k * 0.03).toFixed(4);
         (Object.keys(factors) as Array<keyof typeof factors>).forEach((key) => {
           const el = layersB[key];
           if (el) {
-            const px = dir * (1 - k) * factors[key] * frameW;
-            el.style.transform = `translateX(${px}px)`;
+            const px = (dir * (1 - k) * factors[key] * frameW).toFixed(2);
+            el.style.transform =
+              key === 'jacket'
+                ? `translate3d(${px}px, 0, 0) scale(${inScale})`
+                : `translate3d(${px}px, 0, 0)`;
           }
         });
 
-        if (t < 1 || k < 1) {
-          requestAnimationFrame(step);
+        if (rawT < 1) {
+          rafIdRef.current = requestAnimationFrame(step);
         } else {
-          // Clean reset
+          rafIdRef.current = null;
+          // Clean GPU reset
           slideA.style.visibility = 'hidden';
           slideA.style.zIndex = '0';
           slideA.style.clipPath = 'none';
+          slideA.style.willChange = 'auto';
           slideB.style.zIndex = '2';
           slideB.style.clipPath = 'none';
 
@@ -368,12 +401,25 @@ export const HeroTryOn: React.FC<HeroTryOnProps> = ({
           });
 
           isTransitioningRef.current = false;
+
+          // Commit React state after the 60/120fps transition finishes so zero frames drop
+          startTransition(() => {
+            setActiveIdx(targetIdx);
+            onSelectColor(variants[targetIdx].id, source);
+          });
+
+          // Flush queued click if user clicked another color mid-transition
+          const queued = queuedTargetRef.current;
+          queuedTargetRef.current = null;
+          if (queued && queued.idx !== activeIdxRef.current) {
+            requestAnimationFrame(() => goToSlide(queued.idx, queued.dir, queued.source));
+          }
         }
       };
 
-      requestAnimationFrame(step);
+      rafIdRef.current = requestAnimationFrame(step);
     },
-    [onSelectColor, prefersReducedMotion, unitPx, variants]
+    [onSelectColor, prefersReducedMotion, syncUnderline, unitPx, variants]
   );
 
   // Sync if user selects color in configurator below
@@ -393,62 +439,15 @@ export const HeroTryOn: React.FC<HeroTryOnProps> = ({
     [goToSlide, variants.length]
   );
 
-  // Scroll-motion on desktop wheel inside hero: steps through the 5 colors, then releases to scroll page
-  useEffect(() => {
-    const onWheel = (e: WheelEvent) => {
-      if (window.innerWidth <= 820) return;
-      if (window.scrollY > 12) return;
-
-      let dy = e.deltaY;
-      if (e.deltaMode === 1) dy *= 16;
-      else if (e.deltaMode === 2) dy *= window.innerHeight;
-      if (Math.abs(dy) < 1) return;
-
-      const dir = dy > 0 ? 1 : -1;
-      const cur = activeIdxRef.current;
-
-      // Release scroll cleanly at the 5th color (Black -> down) or 1st color (Bleu Petrol -> up)
-      if ((dir === 1 && cur === variants.length - 1) || (dir === -1 && cur === 0)) {
-        return;
-      }
-
-      e.preventDefault();
-
-      if (wheelDirRef.current !== dir) {
-        wheelAccRef.current = 0;
-        wheelDirRef.current = dir;
-      }
-      wheelAccRef.current += dy;
-
-      if (wheelTimerRef.current) window.clearTimeout(wheelTimerRef.current);
-      wheelTimerRef.current = window.setTimeout(() => {
-        wheelAccRef.current = 0;
-      }, 250);
-
-      const now = performance.now();
-      if (Math.abs(wheelAccRef.current) >= 50 && now - lastWheelStepRef.current >= 140) {
-        wheelAccRef.current = 0;
-        lastWheelStepRef.current = now;
-        stepDirection(dir as 1 | -1);
-      }
-    };
-
-    window.addEventListener('wheel', onWheel, { passive: false });
-    return () => {
-      window.removeEventListener('wheel', onWheel);
-      if (wheelTimerRef.current) window.clearTimeout(wheelTimerRef.current);
-    };
-  }, [stepDirection, variants.length]);
-
-  // Autoplay every 2600ms (paused 6s after any user input)
+  // Smooth Autoplay every 3400ms (paused 7s after any user input or when scrolled down)
   useEffect(() => {
     const timer = window.setInterval(() => {
       if (document.hidden) return;
       if (window.scrollY > window.innerHeight * 0.45) return;
-      if (Date.now() - lastInteractionRef.current < 6000) return;
+      if (Date.now() - lastInteractionRef.current < 7000) return;
       const next = mod(activeIdxRef.current + 1, variants.length);
       goToSlide(next, 1, 'autoplay');
-    }, 2600);
+    }, 3400);
 
     return () => window.clearInterval(timer);
   }, [goToSlide, variants.length]);
@@ -483,7 +482,7 @@ export const HeroTryOn: React.FC<HeroTryOnProps> = ({
         if (!start) return;
         const dx = e.clientX - start.x;
         const dy = e.clientY - start.y;
-        if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) {
+        if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.2) {
           stepDirection(dx < 0 ? 1 : -1);
         }
       }}
@@ -491,7 +490,10 @@ export const HeroTryOn: React.FC<HeroTryOnProps> = ({
         dragStartRef.current = null;
       }}
       className="relative w-full h-[100svh] min-h-[580px] overflow-hidden select-none"
-      style={{ backgroundColor: variants[activeIdx].backdropHex }}
+      style={{
+        backgroundColor: variants[activeIdx].backdropHex,
+        transition: 'background-color 0.5s ease',
+      }}
     >
       {/* 5 Stacked Full-Viewport Color-Flood Slides */}
       {variants.map((variant, idx) => {
@@ -511,8 +513,19 @@ export const HeroTryOn: React.FC<HeroTryOnProps> = ({
               backgroundColor: variant.backdropHex,
               zIndex: isActive ? 2 : 0,
               visibility: isActive ? 'visible' : 'hidden',
+              contain: 'layout style paint',
             }}
           >
+            {/* Subtle radial studio spotlight for depth */}
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background:
+                  'radial-gradient(circle at 50% 48%, rgba(255,255,255,0.16) 0%, rgba(0,0,0,0.08) 72%, rgba(0,0,0,0.22) 100%)',
+              }}
+            />
+
             {/* 1440 x 900 Centered Design Frame */}
             <div
               className="absolute"
@@ -531,10 +544,10 @@ export const HeroTryOn: React.FC<HeroTryOnProps> = ({
                   }
                   layerRefs.current[idx].word = el;
                 }}
-                className="absolute inset-0 pointer-events-none"
+                className="absolute inset-0 pointer-events-none will-change-transform"
               >
                 <div
-                  className="absolute left-1/2 -translate-x-1/2 font-masculine font-bold uppercase text-white whitespace-nowrap leading-none"
+                  className="absolute left-1/2 -translate-x-1/2 font-masculine font-bold uppercase text-white/95 whitespace-nowrap leading-none"
                   style={{
                     top: `${wl.top * unitPx}px`,
                     fontSize: `${wl.fontSize * unitPx}px`,
@@ -553,7 +566,7 @@ export const HeroTryOn: React.FC<HeroTryOnProps> = ({
                   }
                   layerRefs.current[idx].shadow = el;
                 }}
-                className="absolute inset-0 pointer-events-none"
+                className="absolute inset-0 pointer-events-none will-change-transform"
               >
                 <div
                   className="absolute rounded-full"
@@ -563,7 +576,7 @@ export const HeroTryOn: React.FC<HeroTryOnProps> = ({
                     width: `${380 * unitPx}px`,
                     height: `${32 * unitPx}px`,
                     background:
-                      'radial-gradient(closest-side, rgba(20, 24, 30, 0.25), transparent)',
+                      'radial-gradient(closest-side, rgba(16, 20, 26, 0.28), transparent)',
                     filter: `blur(${4 * unitPx}px)`,
                   }}
                 />
@@ -577,7 +590,7 @@ export const HeroTryOn: React.FC<HeroTryOnProps> = ({
                   }
                   layerRefs.current[idx].jacket = el;
                 }}
-                className="absolute inset-0 pointer-events-none"
+                className="absolute inset-0 pointer-events-none will-change-transform"
               >
                 <div
                   className={`absolute ${hasTransparentCutout ? '' : 'mix-blend-multiply'}`}
@@ -591,11 +604,11 @@ export const HeroTryOn: React.FC<HeroTryOnProps> = ({
                   <img
                     src={imgSrc}
                     alt={`MRKSHI Model Khabibi in ${variant.name}`}
-                    loading={idx === 0 ? 'eager' : 'lazy'}
+                    loading="eager"
                     fetchPriority={idx === 0 ? 'high' : 'auto'}
                     decoding="async"
                     referrerPolicy="no-referrer"
-                    className="w-full h-full object-contain drop-shadow-[0_18px_26px_rgba(20,25,35,0.18)]"
+                    className="w-full h-full object-contain drop-shadow-[0_18px_28px_rgba(15,20,30,0.22)]"
                   />
                 </div>
               </div>
@@ -608,7 +621,7 @@ export const HeroTryOn: React.FC<HeroTryOnProps> = ({
                   }
                   layerRefs.current[idx].accent = el;
                 }}
-                className="absolute inset-0 pointer-events-none hidden md:block"
+                className="absolute inset-0 pointer-events-none hidden md:block will-change-transform"
               >
                 <div
                   className="absolute text-white/95 ui-text-shadow font-poppins text-right"
@@ -620,7 +633,7 @@ export const HeroTryOn: React.FC<HeroTryOnProps> = ({
                   }}
                 >
                   <p className="uppercase font-semibold">Model Khabibi · 100 % Naturleder</p>
-                  <p className="mt-0.5 text-white/85 tabular-nums">
+                  <p className="mt-0.5 text-white/90 tabular-nums">
                     -50 % · 177,00 € · Haustür-Lieferung 0 €
                   </p>
                 </div>
@@ -630,7 +643,7 @@ export const HeroTryOn: React.FC<HeroTryOnProps> = ({
         );
       })}
 
-      {/* Fixed Blendy-Style Pure White UI Overlay */}
+      {/* Fixed Pure White UI Overlay */}
       <div className="absolute inset-0 z-10 pointer-events-none text-white">
         {/* Header Row */}
         <header
@@ -645,28 +658,27 @@ export const HeroTryOn: React.FC<HeroTryOnProps> = ({
           {/* Brand Logo */}
           <a
             href="#"
-            className="pointer-events-auto font-brand text-white ui-text-shadow leading-none tracking-[-0.02em] whitespace-nowrap shrink-0 transition-[opacity,translate] duration-1000"
+            className="pointer-events-auto font-brand text-white ui-text-shadow leading-none tracking-[-0.02em] whitespace-nowrap shrink-0 transition-[opacity,transform] duration-700 ease-out"
             style={{
               fontSize: isMobile ? '32px' : `${48 * navUnitPx}px`,
               opacity: revealed ? 1 : 0,
-              translate: revealed ? '0 0' : '0 14px',
-              transitionDelay: '250ms',
+              transform: revealed ? 'translate3d(0,0,0)' : 'translate3d(0,12px,0)',
+              transitionDelay: '120ms',
             }}
           >
             MRKSHI
           </a>
 
-          {/* 5 Flavour/Color Tabs (Row 1 desktop, Row 2 mobile) */}
+          {/* 5 Flavour/Color Tabs */}
           <div
             ref={tabsWrapRef}
-            className="pointer-events-auto absolute left-1/2 -translate-x-1/2 flex items-center transition-[opacity,translate] duration-1000"
+            className="pointer-events-auto absolute left-1/2 flex items-center transition-opacity duration-700 ease-out"
             style={{
               top: isMobile ? '50px' : '50%',
               transform: isMobile ? 'translateX(-50%)' : 'translate(-50%, -50%)',
-              gap: isMobile ? '12px' : `${52 * navUnitPx}px`,
+              gap: isMobile ? '12px' : `${48 * navUnitPx}px`,
               opacity: revealed ? 1 : 0,
-              translate: revealed ? '0 0' : '0 14px',
-              transitionDelay: '330ms',
+              transitionDelay: '180ms',
             }}
           >
             {variants.map((v, idx) => {
@@ -683,7 +695,9 @@ export const HeroTryOn: React.FC<HeroTryOnProps> = ({
                     lastInteractionRef.current = Date.now();
                     goToSlide(idx, idx > activeIdxRef.current ? 1 : -1, 'hero');
                   }}
-                  className="font-poppins font-semibold uppercase tracking-[0.04em] text-white ui-text-shadow whitespace-nowrap shrink-0 cursor-pointer"
+                  className={`font-poppins font-semibold uppercase tracking-[0.04em] text-white ui-text-shadow whitespace-nowrap shrink-0 cursor-pointer transition-opacity duration-200 ${
+                    isCurrent ? 'opacity-100' : 'opacity-80 hover:opacity-100'
+                  }`}
                   style={{
                     fontSize: isMobile ? '12px' : `${18 * navUnitPx}px`,
                     padding: isMobile ? '5px 0' : `${6 * navUnitPx}px 0`,
@@ -701,23 +715,23 @@ export const HeroTryOn: React.FC<HeroTryOnProps> = ({
               style={{
                 bottom: isMobile ? '0px' : `-${2 * navUnitPx}px`,
                 width: `${underlineStyle.width}px`,
-                transform: `translateX(${underlineStyle.left}px)`,
+                transform: `translate3d(${underlineStyle.left}px, 0, 0)`,
                 transition: prefersReducedMotion
                   ? 'none'
-                  : 'transform 0.6s cubic-bezier(0.65, 0, 0.35, 1), width 0.6s cubic-bezier(0.65, 0, 0.35, 1)',
+                  : 'transform 0.45s cubic-bezier(0.22, 1, 0.36, 1), width 0.45s cubic-bezier(0.22, 1, 0.36, 1)',
               }}
             />
           </div>
 
-          {/* Right Account / Cart Links */}
+          {/* Right Cart & Models Links */}
           <div
-            className="pointer-events-auto ml-auto flex items-center font-poppins font-medium text-white ui-text-shadow transition-[opacity,translate] duration-1000"
+            className="pointer-events-auto ml-auto flex items-center font-poppins font-medium text-white ui-text-shadow transition-[opacity,transform] duration-700 ease-out"
             style={{
               gap: isMobile ? '10px' : `${20 * navUnitPx}px`,
               fontSize: isMobile ? '14px' : `${19 * navUnitPx}px`,
               opacity: revealed ? 1 : 0,
-              translate: revealed ? '0 0' : '0 14px',
-              transitionDelay: '410ms',
+              transform: revealed ? 'translate3d(0,0,0)' : 'translate3d(0,12px,0)',
+              transitionDelay: '220ms',
             }}
           >
             <button
@@ -727,7 +741,7 @@ export const HeroTryOn: React.FC<HeroTryOnProps> = ({
             >
               Warenkorb ({cartCount})
             </button>
-            <span className="opacity-90" aria-hidden="true">
+            <span className="opacity-85" aria-hidden="true">
               |
             </span>
             <button
@@ -745,15 +759,13 @@ export const HeroTryOn: React.FC<HeroTryOnProps> = ({
           type="button"
           aria-label="Vorherige Farbe"
           onClick={() => stepDirection(-1)}
-          className="pointer-events-auto absolute flex items-center justify-center cursor-pointer hover:opacity-75 transition-[opacity,translate] duration-1000"
+          className="pointer-events-auto absolute flex items-center justify-center cursor-pointer hover:scale-110 active:scale-95 transition-[opacity,transform] duration-300"
           style={{
-            left: isMobile ? '8px' : `${36 * navUnitPx}px`,
-            bottom: isMobile ? '12px' : `${30 * navUnitPx}px`,
+            left: isMobile ? '10px' : `${36 * navUnitPx}px`,
+            bottom: isMobile ? '14px' : `${30 * navUnitPx}px`,
             width: isMobile ? '48px' : `${52 * navUnitPx}px`,
             height: isMobile ? '48px' : `${52 * navUnitPx}px`,
             opacity: revealed ? 1 : 0,
-            translate: revealed ? '0 0' : '0 14px',
-            transitionDelay: '490ms',
           }}
         >
           <svg
@@ -772,38 +784,57 @@ export const HeroTryOn: React.FC<HeroTryOnProps> = ({
           </svg>
         </button>
 
-        {/* Bottom Center SHOP NOW */}
-        <button
-          type="button"
-          onClick={onScrollToConfigurator}
-          className="pointer-events-auto absolute left-1/2 -translate-x-1/2 font-poppins font-semibold text-white ui-text-shadow uppercase whitespace-nowrap cursor-pointer hover:opacity-80 transition-[opacity,translate] duration-1000"
+        {/* Bottom Center CTA + Color Dots */}
+        <div
+          className="pointer-events-auto absolute left-1/2 -translate-x-1/2 flex flex-col items-center gap-2.5 transition-opacity duration-700"
           style={{
-            bottom: isMobile ? '18px' : `${34 * navUnitPx}px`,
-            fontSize: isMobile ? '15px' : `${20 * navUnitPx}px`,
-            letterSpacing: '0.2em',
-            padding: isMobile ? '10px 14px' : `${10 * navUnitPx}px ${16 * navUnitPx}px`,
+            bottom: isMobile ? '14px' : `${26 * navUnitPx}px`,
             opacity: revealed ? 1 : 0,
-            translate: revealed ? '0 0' : '0 14px',
-            transitionDelay: '570ms',
+            transitionDelay: '260ms',
           }}
         >
-          SHOP NOW · 177 €
-        </button>
+          <button
+            type="button"
+            onClick={onScrollToConfigurator}
+            className="font-poppins font-bold text-white uppercase whitespace-nowrap cursor-pointer px-6 py-2.5 rounded-full bg-black/30 hover:bg-black/55 backdrop-blur-sm border border-white/40 transition-all duration-200 hover:scale-[1.03] active:scale-[0.98]"
+            style={{
+              fontSize: isMobile ? '13px' : `${16 * navUnitPx}px`,
+              letterSpacing: '0.18em',
+            }}
+          >
+            SHOP NOW · 177 €
+          </button>
+
+          <div className="flex items-center gap-2">
+            {variants.map((v, idx) => (
+              <button
+                key={v.id}
+                type="button"
+                aria-label={`Farbe ${v.name}`}
+                onClick={() => {
+                  lastInteractionRef.current = Date.now();
+                  goToSlide(idx, idx > activeIdxRef.current ? 1 : -1, 'hero');
+                }}
+                className={`h-2 rounded-full transition-all duration-300 cursor-pointer border border-white/70 ${
+                  idx === activeIdx ? 'w-7 bg-white' : 'w-2 bg-white/45 hover:bg-white/80'
+                }`}
+              />
+            ))}
+          </div>
+        </div>
 
         {/* Bottom Right Next Arrow */}
         <button
           type="button"
           aria-label="Nächste Farbe"
           onClick={() => stepDirection(1)}
-          className="pointer-events-auto absolute flex items-center justify-center cursor-pointer hover:opacity-75 transition-[opacity,translate] duration-1000"
+          className="pointer-events-auto absolute flex items-center justify-center cursor-pointer hover:scale-110 active:scale-95 transition-[opacity,transform] duration-300"
           style={{
-            right: isMobile ? '8px' : `${36 * navUnitPx}px`,
-            bottom: isMobile ? '12px' : `${30 * navUnitPx}px`,
+            right: isMobile ? '10px' : `${36 * navUnitPx}px`,
+            bottom: isMobile ? '14px' : `${30 * navUnitPx}px`,
             width: isMobile ? '48px' : `${52 * navUnitPx}px`,
             height: isMobile ? '48px' : `${52 * navUnitPx}px`,
             opacity: revealed ? 1 : 0,
-            translate: revealed ? '0 0' : '0 14px',
-            transitionDelay: '650ms',
           }}
         >
           <svg
