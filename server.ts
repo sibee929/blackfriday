@@ -425,18 +425,27 @@ async function dispatchOrderNotifications(
 
   const n8nUrl = cleanEnvSecret(process.env.N8N_WEBHOOK_URL);
   if (n8nUrl && isSafeWebhookUrl(n8nUrl)) {
+    const totalEurNum = Number((order.totalCents / 100).toFixed(2));
+    const totalPriceStr = totalEurNum.toFixed(2);
+    const numericOrderNum = Number(order.id.replace(/[^\d]/g, '')) || order.id;
+    const shipParts = (order.shippingSummary ?? '').split(',').map((s) => s.trim());
+    const fullName = shipParts[0] || order.customerEmail.split('@')[0] || 'MRKSHI Kunde';
+    const [firstName, ...restName] = fullName.split(' ');
+    const lastName = restName.join(' ');
+
     try {
       const resp = await fetch(n8nUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          // Native MRKSHI fields
           event: 'mrkshi.order.paid',
           source: 'reverse-shopify-mrkshi',
           domain: 'mrkshi.com',
           orderId: order.id,
           sessionId: order.sessionId,
           status: order.status,
-          totalEur: Number((order.totalCents / 100).toFixed(2)),
+          totalEur: totalEurNum,
           currency: 'EUR',
           customerEmail: order.customerEmail,
           whatsappNumber: order.whatsappNumber,
@@ -447,6 +456,38 @@ async function dispatchOrderNotifications(
           items: order.items,
           createdAt: order.createdAt,
           paidAt: order.paidAt,
+          // Full Shopify Webhook compatibility fields (for existing n8n mrkshi-order-sale workflow)
+          id: order.id,
+          order_number: numericOrderNum,
+          name: `#${numericOrderNum}`,
+          financial_status: order.status === 'paid' ? 'paid' : 'pending',
+          total_price: totalPriceStr,
+          subtotal_price: totalPriceStr,
+          email: order.customerEmail,
+          phone: order.whatsappNumber,
+          note: [order.measurementsSummary, order.giftNote].filter(Boolean).join(' | '),
+          customer: {
+            first_name: firstName,
+            last_name: lastName,
+            email: order.customerEmail,
+            phone: order.whatsappNumber,
+          },
+          shipping_address: {
+            name: fullName,
+            address1: shipParts[1] ?? order.shippingSummary ?? '',
+            city: shipParts[2] ?? '',
+            country: shipParts[shipParts.length - 1] ?? 'DE',
+            phone: order.whatsappNumber,
+          },
+          line_items: order.items.map((i) => ({
+            product_id: i.productId,
+            title: i.name,
+            name: `${i.name} - ${i.colorName} / ${i.sizeLabel}`,
+            variant_title: `${i.colorName} / ${i.sizeLabel}`,
+            quantity: i.quantity,
+            price: (i.unitAmountCents / 100).toFixed(2),
+            properties: i.customMeasure ? [{ name: 'Maß', value: i.customMeasure }] : [],
+          })),
         }),
       });
       if (resp.ok) {
