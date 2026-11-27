@@ -2188,6 +2188,8 @@ async function startServer() {
       prod.active = body.active;
     }
     const prevLeadImage = prod.gallery[0] ?? prod.colors[0]?.image ?? '';
+    const prevFirstColorId = prod.colors[0]?.id ?? '';
+    const prevGallerySet = new Set(prod.gallery);
 
     if (Array.isArray(body.gallery)) {
       const cleanGallery = body.gallery
@@ -2225,21 +2227,32 @@ async function startServer() {
       }
     }
 
-    // Keep primary color card image synced when gallery #1 (Hauptbild) changed
-    const newLeadImage = prod.gallery[0] ?? '';
-    if (
-      newLeadImage &&
-      prod.colors.length > 0 &&
-      (prod.colors.length === 1 || prod.colors[0].image === prevLeadImage)
-    ) {
-      prod.colors[0] = { ...prod.colors[0], image: newLeadImage };
+    const foregroundColorChanged =
+      prod.colors.length > 0 && prod.colors[0].id !== prevFirstColorId;
+
+    if (foregroundColorChanged && prod.colors[0]?.image) {
+      // Seller pulled a different color variant to #1 foreground -> put its photo at gallery[0]
+      const fgImg = prod.colors[0].image;
+      prod.gallery = [fgImg, ...prod.gallery.filter((u) => u !== fgImg)];
+    } else {
+      // Seller changed gallery[0] on the same foreground color -> sync colors[0].image
+      const newLeadImage = prod.gallery[0] ?? '';
+      if (
+        newLeadImage &&
+        prod.colors.length > 0 &&
+        (prod.colors.length === 1 || prod.colors[0].image === prevLeadImage)
+      ) {
+        prod.colors[0] = { ...prod.colors[0], image: newLeadImage };
+      }
     }
 
-    // Remove deleted gallery images from colors if any color pointed to a removed image
+    // If an image was explicitly deleted from gallery, fallback affected colors to gallery[0]
     if (Array.isArray(body.gallery) && prod.gallery.length > 0) {
-      const galSet = new Set(prod.gallery);
+      const currentGalSet = new Set(prod.gallery);
       prod.colors = prod.colors.map((c) =>
-        galSet.has(c.image) ? c : { ...c, image: prod.gallery[0] }
+        !currentGalSet.has(c.image) && prevGallerySet.has(c.image)
+          ? { ...c, image: prod.gallery[0] }
+          : c
       );
     }
 

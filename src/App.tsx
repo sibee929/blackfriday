@@ -62,11 +62,17 @@ export default function App() {
   // Load authoritative Reverse-Shopify catalog from server (no-store so admin edits appear immediately)
   useEffect(() => {
     let active = true;
+    const hasUrlColor = Boolean(new URLSearchParams(window.location.search).get('color'));
     fetch('/api/catalog', { cache: 'no-store' })
       .then((res) => (res.ok ? res.json() : null))
       .then((data: { products?: JacketProduct[] } | null) => {
         if (active && Array.isArray(data?.products) && data.products.length > 0) {
           setProducts(data.products);
+          const khabibi = data.products.find((p) => p.id === 'khabibi');
+          const fgColorId = khabibi?.colors[0]?.id;
+          if (!hasUrlColor && fgColorId && KHABIBI_COLORS.some((c) => c.id === fgColorId)) {
+            setSelectedColorId(fgColorId);
+          }
         }
       })
       .catch(() => {});
@@ -655,7 +661,14 @@ export default function App() {
       <ReverseShopifyAdmin
         open={adminModalOpen}
         onClose={() => setAdminModalOpen(false)}
-        onCatalogUpdated={(next) => setProducts(next)}
+        onCatalogUpdated={(next) => {
+          setProducts(next);
+          const khabibi = next.find((p) => p.id === 'khabibi');
+          const fgColorId = khabibi?.colors[0]?.id;
+          if (fgColorId && KHABIBI_COLORS.some((c) => c.id === fgColorId)) {
+            setSelectedColorId(fgColorId);
+          }
+        }}
         onOpenPixelSettings={(activeAdminToken) => {
           if (activeAdminToken) setAdminSessionToken(activeAdminToken);
           setAdminModalOpen(false);

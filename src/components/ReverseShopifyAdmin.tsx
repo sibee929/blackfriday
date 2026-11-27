@@ -1446,9 +1446,64 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
                                   )}
                                 </div>
                                 <p className="text-[12px] text-neutral-500 truncate">
-                                  {prod.leatherType} · {prod.colors.length} Farben ·{' '}
-                                  {prod.gallery.length} Galerie-Fotos
+                                  {prod.leatherType} · 1. Vordergrund-Farbe:{' '}
+                                  <strong className="text-black">
+                                    {prod.colors[0]?.name ?? '—'}
+                                  </strong>{' '}
+                                  · {prod.colors.length} Farben · {prod.gallery.length} Fotos
                                 </p>
+                                {prod.colors.length > 1 && (
+                                  <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                                    <span className="text-[10.5px] font-bold uppercase text-neutral-500 mr-0.5">
+                                      Vordergrund wählen:
+                                    </span>
+                                    {prod.colors.map((col, ci) => (
+                                      <button
+                                        key={`${col.id}-${ci}`}
+                                        type="button"
+                                        disabled={ci === 0 || busyAction === `prod-${prod.id}`}
+                                        title={
+                                          ci === 0
+                                            ? `${col.name} ist aktuell 1. Vordergrund-Farbe`
+                                            : `Klicken, um „${col.name}“ als 1. Vordergrund-Farbe nach vorne zu ziehen`
+                                        }
+                                        onClick={async () => {
+                                          const reorderedColors = [
+                                            col,
+                                            ...prod.colors.filter((_, idx) => idx !== ci),
+                                          ];
+                                          const reorderedGallery = [
+                                            col.image,
+                                            ...prod.gallery.filter((u) => u !== col.image),
+                                          ];
+                                          const ok = await handleUpdateProduct(prod.id, {
+                                            colors: reorderedColors,
+                                            gallery: reorderedGallery,
+                                          });
+                                          if (ok && editingId === prod.id && draft) {
+                                            setDraft({
+                                              ...draft,
+                                              colors: reorderedColors,
+                                              gallery: reorderedGallery,
+                                            });
+                                          }
+                                        }}
+                                        className={`inline-flex items-center gap-1 h-6 px-2 rounded-full text-[11px] font-semibold border transition-all ${
+                                          ci === 0
+                                            ? 'bg-black text-white border-black cursor-default'
+                                            : 'bg-white text-neutral-700 border-black/20 hover:border-black hover:text-black cursor-pointer'
+                                        }`}
+                                      >
+                                        <span
+                                          className="w-2.5 h-2.5 rounded-full border border-white/50 shrink-0"
+                                          style={{ backgroundColor: col.hex }}
+                                        />
+                                        <span>{col.name}</span>
+                                        {ci === 0 && <span className="text-[9.5px]">★ #1</span>}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             </div>
 
@@ -1892,12 +1947,19 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
                                 </div>
                               </div>
 
-                              {/* 3. Color Variants Manager */}
+                              {/* 3. Color Variants Manager (Shopify-style Foreground #1 + Reorder) */}
                               <div className="p-4 rounded-xl bg-white border border-black/15 space-y-3">
-                                <div className="flex items-center justify-between">
-                                  <h5 className="text-[13.5px] font-bold">
-                                    Farbvarianten ({draft.colors.length})
-                                  </h5>
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <div>
+                                    <h5 className="text-[13.5px] font-bold">
+                                      Farbvarianten ({draft.colors.length}) — Reihenfolge &
+                                      Vordergrund-Farbe
+                                    </h5>
+                                    <p className="text-[11.5px] text-neutral-500">
+                                      Farbe #1 wird im Shop als erste Vordergrund-Farbe & Titelbild
+                                      angezeigt. Mit ★ oder Pfeilen sofort nach vorne ziehen.
+                                    </p>
+                                  </div>
                                   <button
                                     type="button"
                                     onClick={() =>
@@ -1924,13 +1986,113 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
                                   {draft.colors.map((c, cIdx) => (
                                     <div
                                       key={`${c.id}-${cIdx}`}
-                                      className="flex flex-wrap items-center gap-2 p-2 rounded-lg bg-neutral-50 border border-black/10 text-[12px]"
+                                      className={`flex flex-wrap items-center gap-2 p-2.5 rounded-lg border text-[12px] ${
+                                        cIdx === 0
+                                          ? 'bg-neutral-100 border-2 border-black'
+                                          : 'bg-neutral-50 border-black/10'
+                                      }`}
                                     >
+                                      {/* Up / Down Reorder Controls */}
+                                      <div className="flex flex-col gap-0.5 shrink-0">
+                                        <button
+                                          type="button"
+                                          disabled={cIdx === 0}
+                                          title="Farbe nach oben schieben"
+                                          onClick={async () => {
+                                            const nextColors = [...draft.colors];
+                                            [nextColors[cIdx - 1], nextColors[cIdx]] = [
+                                              nextColors[cIdx],
+                                              nextColors[cIdx - 1],
+                                            ];
+                                            const leadImg = nextColors[0].image;
+                                            const nextGallery = leadImg
+                                              ? [
+                                                  leadImg,
+                                                  ...draft.gallery.filter((u) => u !== leadImg),
+                                                ]
+                                              : draft.gallery;
+                                            const nextDraft = {
+                                              ...draft,
+                                              colors: nextColors,
+                                              gallery: nextGallery,
+                                            };
+                                            setDraft(nextDraft);
+                                            await handleUpdateProduct(prod.id, nextDraft);
+                                          }}
+                                          className="w-6 h-5 rounded bg-white border border-black/15 flex items-center justify-center hover:border-black disabled:opacity-30 cursor-pointer"
+                                        >
+                                          <ArrowUp className="w-3 h-3" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          disabled={cIdx === draft.colors.length - 1}
+                                          title="Farbe nach unten schieben"
+                                          onClick={async () => {
+                                            const nextColors = [...draft.colors];
+                                            [nextColors[cIdx + 1], nextColors[cIdx]] = [
+                                              nextColors[cIdx],
+                                              nextColors[cIdx + 1],
+                                            ];
+                                            const leadImg = nextColors[0].image;
+                                            const nextGallery = leadImg
+                                              ? [
+                                                  leadImg,
+                                                  ...draft.gallery.filter((u) => u !== leadImg),
+                                                ]
+                                              : draft.gallery;
+                                            const nextDraft = {
+                                              ...draft,
+                                              colors: nextColors,
+                                              gallery: nextGallery,
+                                            };
+                                            setDraft(nextDraft);
+                                            await handleUpdateProduct(prod.id, nextDraft);
+                                          }}
+                                          className="w-6 h-5 rounded bg-white border border-black/15 flex items-center justify-center hover:border-black disabled:opacity-30 cursor-pointer"
+                                        >
+                                          <ArrowDown className="w-3 h-3" />
+                                        </button>
+                                      </div>
+
                                       <img
                                         src={c.image}
                                         alt={c.name}
                                         className="w-10 h-10 rounded object-contain bg-white border border-black/10 shrink-0"
                                       />
+
+                                      {cIdx === 0 ? (
+                                        <span className="px-2 py-1 rounded bg-black text-white text-[10.5px] font-bold uppercase tracking-wide shrink-0">
+                                          ★ #1 Vordergrund
+                                        </span>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          title="Als 1. Vordergrund-Farbe nach vorne ziehen"
+                                          onClick={async () => {
+                                            const nextColors = [
+                                              c,
+                                              ...draft.colors.filter((_, idx) => idx !== cIdx),
+                                            ];
+                                            const nextGallery = c.image
+                                              ? [
+                                                  c.image,
+                                                  ...draft.gallery.filter((u) => u !== c.image),
+                                                ]
+                                              : draft.gallery;
+                                            const nextDraft = {
+                                              ...draft,
+                                              colors: nextColors,
+                                              gallery: nextGallery,
+                                            };
+                                            setDraft(nextDraft);
+                                            await handleUpdateProduct(prod.id, nextDraft);
+                                          }}
+                                          className="h-7 px-2.5 rounded border border-black bg-white text-black text-[11px] font-bold hover:bg-black hover:text-white cursor-pointer shrink-0 inline-flex items-center gap-1"
+                                        >
+                                          <Star className="w-3 h-3" />
+                                          <span>Als #1 setzen</span>
+                                        </button>
+                                      )}
                                       <input
                                         type="color"
                                         value={c.hex}

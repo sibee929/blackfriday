@@ -200,10 +200,7 @@ export const CollectionSixSection: React.FC<CollectionSixSectionProps> = ({
           {visibleProducts.map((jacket, cardIdx) => {
             const activeColor = getActiveColor(jacket);
             const activeSize = getActiveSize(jacket);
-            const hasExplicitColorChoice = Boolean(selectedColors[jacket.id]);
-            const primaryImage = hasExplicitColorChoice
-              ? activeColor.image
-              : jacket.gallery[0] || activeColor.image;
+            const primaryImage = activeColor?.image || jacket.gallery[0] || '';
             const optimizedSrc = optimizeProductImage(primaryImage, 640);
             const imgFailed = failedImages[optimizedSrc];
             const openDetails = () => {
@@ -471,15 +468,9 @@ export const CollectionSixSection: React.FC<CollectionSixSectionProps> = ({
             <div className="mt-5 grid grid-cols-1 md:grid-cols-12 gap-6">
               <div className="md:col-span-6">
                 {(() => {
-                  const hasColorPick = Boolean(selectedColors[detailProduct.id]);
-                  const activeColImg = getActiveColor(detailProduct).image;
+                  const activeColImg = getActiveColor(detailProduct)?.image ?? '';
                   const imgs = Array.from(
-                    new Set(
-                      (hasColorPick
-                        ? [activeColImg, ...detailProduct.gallery]
-                        : [...detailProduct.gallery, activeColImg]
-                      ).filter(Boolean)
-                    )
+                    new Set([activeColImg, ...detailProduct.gallery].filter(Boolean))
                   );
                   const safeIdx = Math.min(detailImageIdx, Math.max(0, imgs.length - 1));
                   const shown = optimizeProductImage(imgs[safeIdx] ?? imgs[0], 1000);
