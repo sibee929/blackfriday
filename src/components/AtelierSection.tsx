@@ -3,21 +3,60 @@ import { X } from 'lucide-react';
 
 export type LegalDocType = 'datenschutz' | 'impressum' | 'agb' | 'widerruf' | 'versand' | null;
 
+export interface ExporterPublicInfo {
+  companyName: string;
+  legalFormNote: string;
+  street: string;
+  cityZip: string;
+  country: string;
+  iceNumber: string;
+  email: string;
+  phoneMorocco: string;
+  phoneSupportDe: string;
+  returnNameDe: string;
+  returnStreetDe: string;
+  returnCityZipDe: string;
+  defaultHsCode: string;
+  defaultIncoterms: 'DDP' | 'DAP';
+}
+
+const DEFAULT_EXPORTER_INFO: ExporterPublicInfo = {
+  companyName: 'MRKSHI Atelier',
+  legalFormNote: 'SARL en cours de constitution',
+  street: 'Quartier Maarif, Casablanca',
+  cityZip: '20100 Casablanca',
+  country: 'Morocco',
+  iceNumber: 'En cours d’attribution',
+  email: 'service@mrkshi.com',
+  phoneMorocco: '',
+  phoneSupportDe: '+49 176 43488260',
+  returnNameDe: 'MRKSHI',
+  returnStreetDe: 'Alte Dorfstraße 3a',
+  returnCityZipDe: '61137 Schöneck',
+  defaultHsCode: '42031000',
+  defaultIncoterms: 'DDP',
+};
+
 interface AtelierFooterProps {
   pixelConfigured: boolean;
   activeLegalDialog: LegalDocType;
+  exporterInfo?: ExporterPublicInfo | null;
   onChangeLegalDialog: (doc: LegalDocType) => void;
   onOpenPixelSettings: () => void;
   onOpenAdminPanel: () => void;
 }
 
 export const AtelierSectionAndFooter: React.FC<AtelierFooterProps> = ({
-  pixelConfigured,
   activeLegalDialog,
+  exporterInfo,
   onChangeLegalDialog,
-  onOpenPixelSettings,
   onOpenAdminPanel,
 }) => {
+  const exp = exporterInfo ?? DEFAULT_EXPORTER_INFO;
+  const sellerTitle = exp.legalFormNote
+    ? `${exp.companyName} (${exp.legalFormNote})`
+    : exp.companyName;
+  const deReturnLine = `${exp.returnNameDe}, ${exp.returnStreetDe}, ${exp.returnCityZipDe}`;
   return (
     <>
       {/* Editorial Atelier Provenance & GEO FAQ Summary — Pure White + Sharp Black */}
@@ -76,7 +115,8 @@ export const AtelierSectionAndFooter: React.FC<AtelierFooterProps> = ({
           <div>
             <span className="font-brand text-[20px] text-black">MRKSHI</span>
             <span className="ml-3 font-medium text-black/75">
-              © {new Date().getFullYear()} www.mrkshi.com · Alte Dorfstraße 3a, 61137 Schöneck (DE)
+              © {new Date().getFullYear()} www.mrkshi.com · Casablanca × Deutschland (Retouren:{' '}
+              {exp.returnCityZipDe})
             </span>
           </div>
 
@@ -159,14 +199,22 @@ export const AtelierSectionAndFooter: React.FC<AtelierFooterProps> = ({
               {activeLegalDialog === 'versand' && (
                 <>
                   <p>
-                    Alle Bestellungen (alle 9 Herren-Lederjacken einheitlich 177,00 € inkl. MwSt.)
-                    werden versichert per <strong>DHL Express</strong> kostenlos bis vor deine
-                    Haustür nach Deutschland, Österreich und in die Schweiz geliefert (Lieferzeit:
-                    7–14 Werktage, Versandkosten: 0,00 €).
+                    Alle Bestellungen (Herren-Lederjacken ab 177,00 € inkl. Abgaben) werden
+                    versichert per <strong>DHL Express / Kurier</strong> kostenlos (0,00 €
+                    Versandkosten) bis vor deine Haustür nach Deutschland, Österreich und in die
+                    Schweiz geliefert (Lieferzeit: 7–14 Werktage).
                   </p>
                   <p>
-                    Rücksendungen innerhalb von 14 Tagen erfolgen unkompliziert über unsere deutsche
-                    Rücksendeadresse: <strong>Alte Dorfstraße 3a, 61137 Schöneck</strong>.
+                    <strong>Zoll & Präferenzursprung Marokko:</strong> Unsere Jacken werden in
+                    Marokko aus 100 % Naturleder gefertigt (HS-Code {exp.defaultHsCode}, Origin:
+                    Morocco, Präferenzzollsatz 0 % gem. EU-Marokko-Abkommen). Der Versand erfolgt im
+                    Modus <strong>Incoterms: {exp.defaultIncoterms}</strong>.
+                  </p>
+                  <p>
+                    <strong>Deutsche Rücksendeadresse (14 Tage bei Standardgrößen):</strong>{' '}
+                    Rücksendungen innerhalb Deutschlands erfolgen unkompliziert an unsere deutsche
+                    Retouren-Annahmestelle: <strong>{deReturnLine}</strong> (kein teurer
+                    Rückversand nach Marokko nötig).
                   </p>
                 </>
               )}
@@ -174,19 +222,33 @@ export const AtelierSectionAndFooter: React.FC<AtelierFooterProps> = ({
               {activeLegalDialog === 'impressum' && (
                 <>
                   <p>
-                    <strong>MRKSHI Lederatelier</strong> · Alte Dorfstraße 3a · 61137 Schöneck ·
-                    Deutschland
+                    <strong>Verkäufer & Betreiber (Exporter):</strong>
+                    <br />
+                    {sellerTitle}
+                    <br />
+                    {exp.street} · {exp.cityZip} · {exp.country}
+                    {exp.iceNumber ? (
+                      <>
+                        <br />
+                        ICE: <span className="font-mono">{exp.iceNumber}</span>
+                      </>
+                    ) : null}
                   </p>
                   <p>
-                    E-Mail: <span className="font-mono">service@mrkshi.com</span> · WhatsApp &
-                    Telefon: <span className="font-mono">+49 176 43488260</span>
+                    <strong>Kontakt & Kundenservice (Deutsch / Englisch / Französisch):</strong>
+                    <br />
+                    E-Mail: <span className="font-mono">{exp.email}</span> · WhatsApp & Support:{' '}
+                    <span className="font-mono">{exp.phoneSupportDe}</span>
+                  </p>
+                  <p>
+                    <strong>Rücksendeadresse & Logistik-Annahmestelle Deutschland:</strong>
+                    <br />
+                    {deReturnLine}, Deutschland <em>(ausschließlich Retouren-Empfangsstelle)</em>
                   </p>
                   <p>Domain: https://www.mrkshi.com</p>
                   <p>
-                    Plattform der EU-Kommission zur Online-Streitbeilegung:
-                    https://ec.europa.eu/consumers/odr/. Wir sind weder verpflichtet noch bereit, an
-                    einem Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle
-                    teilzunehmen.
+                    Wir sind weder verpflichtet noch bereit, an einem Streitbeilegungsverfahren vor
+                    einer Verbraucherschlichtungsstelle teilzunehmen.
                   </p>
                 </>
               )}
@@ -194,21 +256,20 @@ export const AtelierSectionAndFooter: React.FC<AtelierFooterProps> = ({
               {activeLegalDialog === 'widerruf' && (
                 <>
                   <p>
-                    <strong>Widerrufsrecht:</strong> Sie haben das Recht, binnen vierzehn Tagen
-                    ohne Angabe von Gründen diesen Vertrag zu widerrufen (verlängert für
-                    Weihnachtsgeschenke bis 15. Januar). Die Widerrufsfrist beträgt vierzehn Tage
-                    ab dem Tag, an dem Sie oder ein benannter Dritter die Ware in Besitz genommen
-                    haben.
+                    <strong>Widerrufsrecht (14 Tage bei Standardgrößen):</strong> Sie haben das
+                    Recht, binnen vierzehn Tagen ab Erhalt der Ware ohne Angabe von Gründen diesen
+                    Vertrag bei Standardgrößen (S–3XL) zu widerrufen.
                   </p>
                   <p>
                     Um Ihr Widerrufsrecht auszuüben, informieren Sie uns bitte per E-Mail an{' '}
-                    <strong>service@mrkshi.com</strong> oder WhatsApp (+49 176 43488260) und senden
-                    die ungetragene Jacke an: MRKSHI, Alte Dorfstraße 3a, 61137 Schöneck.
+                    <strong>{exp.email}</strong> oder WhatsApp ({exp.phoneSupportDe}) und senden die
+                    ungetragene Jacke innerhalb Deutschlands an unsere Retouren-Empfangsstelle:{' '}
+                    <strong>{deReturnLine}</strong>.
                   </p>
                   <p>
-                    <strong>Hinweis zu Sondermaßen:</strong> Gesetzliche Ausnahme nach § 312g Abs.
-                    2 Nr. 1 BGB bei individuell nach Kundenwunsch zugeschnittenen Maßen; bei
-                    Standardgrößen (S–3XL) gilt volles 14-tägiges Rückgaberecht.
+                    <strong>Ausschluss bei Maßanfertigungen:</strong> Kein Widerrufsrecht besteht
+                    bei individuellen Maßanfertigungen / Sondermaßen, die nach Kundenspezifikation
+                    angefertigt werden (<strong>§ 312g Abs. 2 Nr. 1 BGB</strong>).
                   </p>
                 </>
               )}
@@ -216,19 +277,23 @@ export const AtelierSectionAndFooter: React.FC<AtelierFooterProps> = ({
               {activeLegalDialog === 'agb' && (
                 <>
                   <p>
-                    <strong>1. Geltungsbereich:</strong> Diese AGB gelten für alle Bestellungen über
-                    www.mrkshi.com durch Verbraucher in Deutschland, Österreich und der Schweiz.
+                    <strong>1. Vertragspartner & Geltungsbereich:</strong> Vertragspartner für alle
+                    Bestellungen über www.mrkshi.com ist <strong>{sellerTitle}</strong> ({exp.street}
+                    , {exp.cityZip}, {exp.country}). Für Rücksendungen innerhalb Deutschlands steht
+                    unsere Retouren-Annahmestelle ({deReturnLine}) bereit.
                   </p>
                   <p>
-                    <strong>2. Preise & Zahlung:</strong> Alle Preise verstehen sich in Euro inkl.
-                    gesetzlicher Mehrwertsteuer und kostenlosem DHL-Expressversand. Die Zahlung
-                    erfolgt sicher über Stripe (Apple Pay, Klarna, PayPal, Google Pay, Kreditkarte,
-                    SEPA).
+                    <strong>2. Preise, Zoll & Zahlung:</strong> Alle ausgewiesenen Endpreise
+                    verstehen sich in Euro inklusive kostenlosem Kurierversand (0,00 €). Die
+                    Zahlung erfolgt verschlüsselt über Stripe (Apple Pay, Google Pay, Klarna,
+                    PayPal, Visa, Mastercard).
                   </p>
                   <p>
-                    <strong>3. Naturprodukt Echtleder:</strong> Jede Jacke besteht aus 100 %
-                    echtem Naturleder (Nappa, Rind- oder Wildleder). Leichte Unterschiede in Narbung
-                    und Farbaufnahme unterstreichen die Handarbeit aus Marokko.
+                    <strong>3. Naturprodukt Echtleder & Maßanfertigung:</strong> Jede Jacke besteht
+                    aus 100 % echtem marokkanischem Naturleder (Lamm-Nappa, Rind- oder Wildleder).
+                    Bei Standardgrößen (S–3XL) gilt ein 14-tägiges Widerrufsrecht ab Erhalt der
+                    Ware; individuelle Maßanfertigungen sind gem. § 312g Abs. 2 Nr. 1 BGB vom
+                    Widerruf ausgeschlossen.
                   </p>
                 </>
               )}
@@ -236,9 +301,9 @@ export const AtelierSectionAndFooter: React.FC<AtelierFooterProps> = ({
               {activeLegalDialog === 'datenschutz' && (
                 <>
                   <p>
-                    <strong>1. Verantwortlicher (Art. 4 Nr. 7 DSGVO):</strong> MRKSHI Lederatelier,
-                    Alte Dorfstraße 3a, 61137 Schöneck, E-Mail: service@mrkshi.com, Tel: +49 176
-                    43488260.
+                    <strong>1. Verantwortlicher (Art. 4 Nr. 7 DSGVO):</strong> {sellerTitle},{' '}
+                    {exp.street}, {exp.cityZip}, {exp.country}, E-Mail: {exp.email}, Kundenservice &
+                    Ansprechpartner DE: {deReturnLine}, Tel: {exp.phoneSupportDe}.
                   </p>
                   <p>
                     <strong>2. Zahlungsabwicklung (Stripe, Klarna, Apple Pay, PayPal):</strong>{' '}
@@ -247,9 +312,11 @@ export const AtelierSectionAndFooter: React.FC<AtelierFooterProps> = ({
                     von Art. 6 Abs. 1 lit. b DSGVO.
                   </p>
                   <p>
-                    <strong>3. Hosting & Sicherheit (Cloudflare):</strong> Unsere Domain
-                    www.mrkshi.com nutzt Cloudflare als CDN/Proxy zum Schutz vor Angriffen (Art. 6
-                    Abs. 1 lit. f DSGVO).
+                    <strong>3. Versand, Zollabwicklung & Hosting (Cloudflare):</strong> Zur
+                    Zustellung und Verzollung (Commercial Invoice / DHL / UPS) werden Name,
+                    Lieferadresse und Telefonnummer an den Versanddienstleister übermittelt (Art. 6
+                    Abs. 1 lit. b DSGVO). Unsere Domain www.mrkshi.com nutzt Cloudflare als
+                    CDN/Proxy zum Schutz vor Angriffen (Art. 6 Abs. 1 lit. f DSGVO).
                   </p>
                   <p>
                     <strong>4. WhatsApp & Maßchecker:</strong> Ihre WhatsApp-Nummer und Körpermaße

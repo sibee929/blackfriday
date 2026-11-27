@@ -97,11 +97,41 @@ interface OrderItemRecord {
   quantity: number;
 }
 
+interface OrderShippingAddress {
+  name: string;
+  street: string;
+  line2?: string;
+  zip: string;
+  city: string;
+  country: string;
+  phone?: string;
+}
+
+interface ExporterSettings {
+  companyName: string;
+  legalFormNote: string;
+  street: string;
+  cityZip: string;
+  country: string;
+  iceNumber: string;
+  email: string;
+  phoneMorocco: string;
+  phoneSupportDe: string;
+  returnNameDe: string;
+  returnStreetDe: string;
+  returnCityZipDe: string;
+  defaultHsCode: string;
+  defaultIncoterms: 'DDP' | 'DAP';
+  defaultWeightKg: number;
+  dispatchMode: 'casablanca_direct' | 'schoeneck_hub';
+}
+
 interface OrderRecord {
   id: string;
   sessionId: string;
   mode: 'stripe' | 'preview';
   status: 'pending_payment' | 'paid' | 'cancelled';
+  customerName?: string;
   customerEmail: string;
   whatsappNumber: string;
   measurementsSummary: string;
@@ -114,6 +144,11 @@ interface OrderRecord {
   capiSent?: boolean;
   inventoryDecremented: boolean;
   shippingSummary?: string;
+  shippingAddress?: OrderShippingAddress;
+  fulfillmentStatus?: 'unfulfilled' | 'in_production' | 'shipped';
+  carrier?: string;
+  trackingNumber?: string;
+  shippedAt?: string;
   clientIp?: string;
   clientUserAgent?: string;
   fbc?: string;
@@ -145,6 +180,7 @@ interface StoreState {
   newsletter: NewsletterSubscriber[];
   oneEuroTestProductId: string | null;
   pixelConfig: PixelConfigState;
+  exporterSettings: ExporterSettings;
   adminPasswordHash: string | null;
   orderCounter: number;
 }
@@ -162,6 +198,27 @@ const initialPixelId = cleanEnvSecret(process.env.META_PIXEL_ID);
 const initialGa4 = (process.env.GA4_MEASUREMENT_ID ?? '').trim();
 const initialGtm = (process.env.GTM_ID ?? '').trim();
 const initialTiktok = (process.env.TIKTOK_PIXEL_ID ?? '').trim();
+
+function createDefaultExporterSettings(): ExporterSettings {
+  return {
+    companyName: 'MRKSHI Atelier',
+    legalFormNote: 'SARL en cours de constitution',
+    street: 'Quartier Maarif, Casablanca',
+    cityZip: '20100 Casablanca',
+    country: 'Morocco',
+    iceNumber: 'En cours d’attribution',
+    email: 'service@mrkshi.com',
+    phoneMorocco: '',
+    phoneSupportDe: '+49 176 43488260',
+    returnNameDe: 'MRKSHI',
+    returnStreetDe: 'Alte Dorfstraße 3a',
+    returnCityZipDe: '61137 Schöneck',
+    defaultHsCode: '42031000',
+    defaultIncoterms: 'DDP',
+    defaultWeightKg: 1.35,
+    dispatchMode: 'casablanca_direct',
+  };
+}
 
 function createDefaultState(): StoreState {
   return {
@@ -182,6 +239,7 @@ function createDefaultState(): StoreState {
       gtmId: /^(GTM-[A-Z0-9]{5,10}|AW-\d{6,14})$/i.test(initialGtm) ? initialGtm.toUpperCase() : '',
       tiktokPixelId: /^[A-Z0-9]{10,28}$/i.test(initialTiktok) ? initialTiktok : '',
     },
+    exporterSettings: createDefaultExporterSettings(),
     adminPasswordHash: null,
     orderCounter: 1001,
   };
@@ -289,6 +347,12 @@ function loadStoreState(): StoreState {
         ...savedPixel,
         pixelId: resolvedPixelId,
         enabled: savedPixel.pixelId ? Boolean(savedPixel.enabled) : true,
+      },
+      exporterSettings: {
+        ...defaults.exporterSettings,
+        ...(parsed.exporterSettings && typeof parsed.exporterSettings === 'object'
+          ? parsed.exporterSettings
+          : {}),
       },
       adminPasswordHash:
         typeof parsed.adminPasswordHash === 'string' ? parsed.adminPasswordHash : null,
@@ -492,29 +556,81 @@ async function sendMetaCapiPurchase(
   });
 }
 
-function enrichOrderFromStripeSession(order: OrderRecord, session: Stripe.Checkout.Session): void {
+function mapCountryName(codeOrName: string | null | undefined): string {
+  const c = (codeOrName ?? '').trim();
+  const upper = c.toUpperCase();
+  if (upper === 'DE' || upper === 'DEU' || upper === 'DEUTSCHLAND') return 'Germany';
+  if (upper === 'AT' || upper === 'AUT' || upper === 'ÖSTERREICH') return 'Austria';
+  if (upper === 'CH' || upper === 'CHE' || upper === 'SCHWEIZ') return 'Switzerland';
+  if (upper === 'FR') return 'France';
+  if (upper === 'NL') return 'Netherlands';
+  if (upper === 'BE') return 'Belgium';
+  if (upper === 'LU') return 'Luxembourg';
+  return c || 'Germany';
+}
+
+function formatShippingSummaryFromAddress(addr: OrderShippingAddress): string {
+  return [
+    addr.name,
+    addr.street,
+    addr.line2,
+    [addr.zip, addr.city].filter(Boolean).join(' '),
+    addr.country,
+  ]
+    .filter(Boolean)
+    .join(', ')
+    .slice(0, 260);
+}
+
+function enrichOrderFromStripeSession(order: OrderRecord, session: Stripe.Checkout.Session): boolean {
+  let changed = false;
   const stripeEmail = session.customer_details?.email?.trim().toLowerCase();
   if (stripeEmail && !order.customerEmail) {
     order.customerEmail = stripeEmail;
+    changed = true;
   }
   const stripePhone = session.customer_details?.phone?.trim();
-  if (stripePhone && !order.whatsappNumber) {
+  if (stripePhone && (!order.whatsappNumber || order.whatsappNumber === 'via Stripe Checkout')) {
     order.whatsappNumber = stripePhone;
+    changed = true;
   }
-  const ship = session.collected_information?.shipping_details ?? session.customer_details;
-  const addr = ship?.address;
-  if (addr && !order.shippingSummary) {
-    const parts = [
-      ship?.name,
-      addr.line1,
-      addr.line2,
-      [addr.postal_code, addr.city].filter(Boolean).join(' '),
-      addr.country,
-    ].filter(Boolean);
-    if (parts.length > 0) {
-      order.shippingSummary = parts.join(', ').slice(0, 240);
+
+  const legacyShip = (
+    session as unknown as {
+      shipping_details?: { name?: string | null; address?: Stripe.Address | null } | null;
+    }
+  ).shipping_details;
+  const ship =
+    session.collected_information?.shipping_details ?? legacyShip ?? session.customer_details;
+  const resolvedName =
+    ship?.name?.trim() || session.customer_details?.name?.trim() || order.customerName || '';
+
+  if (resolvedName && !order.customerName) {
+    order.customerName = resolvedName;
+    changed = true;
+  }
+
+  const addr = ship?.address ?? session.customer_details?.address;
+  if (addr && (addr.line1 || addr.city || addr.postal_code)) {
+    const structured: OrderShippingAddress = {
+      name: resolvedName || order.shippingAddress?.name || '',
+      street: (addr.line1 ?? '').trim(),
+      ...(addr.line2 ? { line2: addr.line2.trim() } : {}),
+      zip: (addr.postal_code ?? '').trim(),
+      city: (addr.city ?? '').trim(),
+      country: mapCountryName(addr.country),
+      phone: stripePhone || order.whatsappNumber || undefined,
+    };
+    if (!order.shippingAddress || !order.shippingAddress.street) {
+      order.shippingAddress = structured;
+      order.shippingSummary = formatShippingSummaryFromAddress(structured);
+      changed = true;
+    } else if (!order.shippingSummary) {
+      order.shippingSummary = formatShippingSummaryFromAddress(order.shippingAddress);
+      changed = true;
     }
   }
+  return changed;
 }
 
 async function dispatchOrderNotifications(
@@ -532,7 +648,12 @@ async function dispatchOrderNotifications(
     const totalPriceStr = totalEurNum.toFixed(2);
     const numericOrderNum = Number(order.id.replace(/[^\d]/g, '')) || order.id;
     const shipParts = (order.shippingSummary ?? '').split(',').map((s) => s.trim());
-    const fullName = shipParts[0] || order.customerEmail.split('@')[0] || 'MRKSHI Kunde';
+    const fullName =
+      order.shippingAddress?.name ||
+      order.customerName ||
+      shipParts[0] ||
+      order.customerEmail.split('@')[0] ||
+      'MRKSHI Kunde';
     const [firstName, ...restName] = fullName.split(' ');
     const lastName = restName.join(' ');
 
@@ -577,10 +698,14 @@ async function dispatchOrderNotifications(
           },
           shipping_address: {
             name: fullName,
-            address1: shipParts[1] ?? order.shippingSummary ?? '',
-            city: shipParts[2] ?? '',
-            country: shipParts[shipParts.length - 1] ?? 'DE',
-            phone: order.whatsappNumber,
+            address1:
+              order.shippingAddress?.street || shipParts[1] || order.shippingSummary || '',
+            address2: order.shippingAddress?.line2 || '',
+            zip: order.shippingAddress?.zip || '',
+            city: order.shippingAddress?.city || shipParts[2] || '',
+            country:
+              order.shippingAddress?.country || shipParts[shipParts.length - 1] || 'Germany',
+            phone: order.shippingAddress?.phone || order.whatsappNumber,
           },
           line_items: order.items.map((i) => ({
             product_id: i.productId,
@@ -1717,7 +1842,71 @@ async function startServer() {
     res.json({ token: issueAdminToken() });
   });
 
-  app.get('/api/admin/state', requireAdminAuth, (_req: Request, res: Response) => {
+  // Public read-only exporter & customs metadata for storefront legal pages
+  app.get('/api/exporter-info', (_req: Request, res: Response) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.json(store.exporterSettings);
+  });
+
+  let lastAutoStripeSyncAt = 0;
+  async function syncRecentStripeOrders(
+    force = false
+  ): Promise<{ syncedCount: number; paidRecoveredCount: number }> {
+    const now = Date.now();
+    if (!force && now - lastAutoStripeSyncAt < 15_000) {
+      return { syncedCount: 0, paidRecoveredCount: 0 };
+    }
+    lastAutoStripeSyncAt = now;
+
+    const stripe = getStripeClient();
+    if (!stripe) return { syncedCount: 0, paidRecoveredCount: 0 };
+
+    const candidates = store.orders
+      .filter(
+        (o) =>
+          o.mode === 'stripe' &&
+          o.sessionId &&
+          !o.sessionId.startsWith('cs_preview_') &&
+          (o.status !== 'paid' || !o.shippingAddress?.street || !o.customerName)
+      )
+      .slice(0, 20);
+
+    if (candidates.length === 0) {
+      return { syncedCount: 0, paidRecoveredCount: 0 };
+    }
+
+    let syncedCount = 0;
+    let paidRecoveredCount = 0;
+    let dirty = false;
+
+    for (const ord of candidates) {
+      try {
+        const session = await stripe.checkout.sessions.retrieve(ord.sessionId);
+        const enriched = enrichOrderFromStripeSession(ord, session);
+        if (enriched) {
+          syncedCount += 1;
+          dirty = true;
+        }
+        if (session.payment_status === 'paid' && ord.status !== 'paid') {
+          await markOrderPaidAndDispatch(ord);
+          paidRecoveredCount += 1;
+          syncedCount += 1;
+          dirty = false; // markOrderPaidAndDispatch already persisted
+        }
+      } catch {
+        // Ignore expired or test/live mismatched sessions cleanly
+      }
+    }
+
+    if (dirty) {
+      persistStoreState();
+    }
+    return { syncedCount, paidRecoveredCount };
+  }
+
+  app.get('/api/admin/state', requireAdminAuth, async (_req: Request, res: Response) => {
+    await syncRecentStripeOrders(false);
+
     const sk = cleanEnvSecret(process.env.STRIPE_SECRET_KEY);
     const stripeMode = sk.startsWith('sk_live_')
       ? 'live'
@@ -1730,6 +1919,7 @@ async function startServer() {
       orders: store.orders,
       newsletter: store.newsletter,
       oneEuroTestProductId: store.oneEuroTestProductId,
+      exporterSettings: store.exporterSettings,
       integrations: {
         stripeConfigured: Boolean(sk),
         stripeMode,
@@ -1743,6 +1933,163 @@ async function startServer() {
         pixelId: store.pixelConfig.pixelId || '',
         domain: 'www.mrkshi.com',
       },
+    });
+  });
+
+  app.put('/api/admin/exporter-settings', requireAdminAuth, (req: Request, res: Response) => {
+    const body = (req.body ?? {}) as Partial<Record<keyof ExporterSettings, unknown>>;
+    const cleanStr = (val: unknown, fallback: string, maxLen = 140) =>
+      typeof val === 'string' ? val.trim().slice(0, maxLen) : fallback;
+
+    const cur = store.exporterSettings;
+    const nextWeight =
+      typeof body.defaultWeightKg === 'number' && Number.isFinite(body.defaultWeightKg)
+        ? Math.min(25, Math.max(0.2, Number(body.defaultWeightKg.toFixed(2))))
+        : cur.defaultWeightKg;
+
+    store.exporterSettings = {
+      companyName: cleanStr(body.companyName, cur.companyName, 100) || 'MRKSHI Atelier',
+      legalFormNote: cleanStr(body.legalFormNote, cur.legalFormNote, 120),
+      street: cleanStr(body.street, cur.street, 140),
+      cityZip: cleanStr(body.cityZip, cur.cityZip, 90),
+      country: cleanStr(body.country, cur.country, 60) || 'Morocco',
+      iceNumber: cleanStr(body.iceNumber, cur.iceNumber, 90),
+      email: cleanStr(body.email, cur.email, 100) || 'service@mrkshi.com',
+      phoneMorocco: cleanStr(body.phoneMorocco, cur.phoneMorocco, 50),
+      phoneSupportDe: cleanStr(body.phoneSupportDe, cur.phoneSupportDe, 50),
+      returnNameDe: cleanStr(body.returnNameDe, cur.returnNameDe, 90) || 'MRKSHI',
+      returnStreetDe: cleanStr(body.returnStreetDe, cur.returnStreetDe, 120) || 'Alte Dorfstraße 3a',
+      returnCityZipDe: cleanStr(body.returnCityZipDe, cur.returnCityZipDe, 80) || '61137 Schöneck',
+      defaultHsCode:
+        cleanStr(body.defaultHsCode, cur.defaultHsCode, 20).replace(/[^0-9.]/g, '') || '42031000',
+      defaultIncoterms: body.defaultIncoterms === 'DAP' ? 'DAP' : 'DDP',
+      defaultWeightKg: nextWeight,
+      dispatchMode: body.dispatchMode === 'schoeneck_hub' ? 'schoeneck_hub' : 'casablanca_direct',
+    };
+    persistStoreState();
+    res.json({
+      ok: true,
+      exporterSettings: store.exporterSettings,
+      message: 'Exporteur-, SARL- & Zoll-Stammdaten gespeichert.',
+    });
+  });
+
+  app.post('/api/admin/orders/sync-stripe', requireAdminAuth, async (_req: Request, res: Response) => {
+    const { syncedCount, paidRecoveredCount } = await syncRecentStripeOrders(true);
+    res.json({
+      ok: true,
+      orders: store.orders,
+      syncedCount,
+      paidRecoveredCount,
+      message:
+        syncedCount > 0
+          ? `${syncedCount} Stripe-Bestellung(en) synchronisiert (${paidRecoveredCount} Zahlung(en) auf Bezahlt aktualisiert).`
+          : 'Alle Stripe-Bestellungen sind bereits aktuell.',
+    });
+  });
+
+  app.patch('/api/admin/orders/:id', requireAdminAuth, async (req: Request, res: Response) => {
+    const order = store.orders.find((o) => o.id === req.params.id);
+    if (!order) {
+      res.status(404).json({ error: 'Bestellung nicht gefunden.' });
+      return;
+    }
+
+    const body = (req.body ?? {}) as {
+      status?: unknown;
+      fulfillmentStatus?: unknown;
+      carrier?: unknown;
+      trackingNumber?: unknown;
+      customerName?: unknown;
+      customerEmail?: unknown;
+      whatsappNumber?: unknown;
+      measurementsSummary?: unknown;
+      giftNote?: unknown;
+      shippingAddress?: Partial<Record<keyof OrderShippingAddress, unknown>>;
+    };
+
+    if (typeof body.customerName === 'string') {
+      order.customerName = body.customerName.trim().slice(0, 120);
+    }
+    if (typeof body.customerEmail === 'string') {
+      order.customerEmail = body.customerEmail.trim().toLowerCase().slice(0, 120);
+    }
+    if (typeof body.whatsappNumber === 'string') {
+      order.whatsappNumber = body.whatsappNumber.trim().slice(0, 50);
+    }
+    if (typeof body.measurementsSummary === 'string') {
+      order.measurementsSummary = body.measurementsSummary.trim().slice(0, 450);
+    }
+    if (typeof body.giftNote === 'string') {
+      order.giftNote = body.giftNote.trim().slice(0, 350);
+    }
+    if (typeof body.carrier === 'string') {
+      order.carrier = body.carrier.trim().slice(0, 60);
+    }
+    if (typeof body.trackingNumber === 'string') {
+      order.trackingNumber = body.trackingNumber.trim().slice(0, 90);
+    }
+    if (
+      body.fulfillmentStatus === 'unfulfilled' ||
+      body.fulfillmentStatus === 'in_production' ||
+      body.fulfillmentStatus === 'shipped'
+    ) {
+      order.fulfillmentStatus = body.fulfillmentStatus;
+      if (body.fulfillmentStatus === 'shipped' && !order.shippedAt) {
+        order.shippedAt = new Date().toISOString();
+      }
+    }
+
+    if (body.shippingAddress && typeof body.shippingAddress === 'object') {
+      const s = body.shippingAddress;
+      const prev = order.shippingAddress ?? {
+        name: order.customerName ?? '',
+        street: '',
+        zip: '',
+        city: '',
+        country: 'Germany',
+      };
+      const nextAddr: OrderShippingAddress = {
+        name:
+          typeof s.name === 'string'
+            ? s.name.trim().slice(0, 120)
+            : order.customerName || prev.name,
+        street: typeof s.street === 'string' ? s.street.trim().slice(0, 140) : prev.street,
+        ...(typeof s.line2 === 'string' && s.line2.trim()
+          ? { line2: s.line2.trim().slice(0, 100) }
+          : {}),
+        zip: typeof s.zip === 'string' ? s.zip.trim().slice(0, 24) : prev.zip,
+        city: typeof s.city === 'string' ? s.city.trim().slice(0, 90) : prev.city,
+        country:
+          typeof s.country === 'string' && s.country.trim()
+            ? mapCountryName(s.country)
+            : prev.country || 'Germany',
+        phone:
+          typeof s.phone === 'string' && s.phone.trim()
+            ? s.phone.trim().slice(0, 50)
+            : order.whatsappNumber || prev.phone,
+      };
+      order.shippingAddress = nextAddr;
+      if (nextAddr.name && !order.customerName) {
+        order.customerName = nextAddr.name;
+      }
+      order.shippingSummary = formatShippingSummaryFromAddress(nextAddr);
+    }
+
+    if (body.status === 'paid' && order.status !== 'paid') {
+      await markOrderPaidAndDispatch(order);
+    } else if (body.status === 'pending_payment' || body.status === 'cancelled') {
+      order.status = body.status;
+      persistStoreState();
+    } else {
+      persistStoreState();
+    }
+
+    res.json({
+      ok: true,
+      order,
+      orders: store.orders,
+      message: `Bestellung ${order.id} gespeichert.`,
     });
   });
 

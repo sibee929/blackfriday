@@ -24,6 +24,7 @@ import { CollectionSixSection } from './components/CollectionSixSection';
 import { TrustAndReviewsSection } from './components/TrustAndReviewsSection';
 import {
   AtelierSectionAndFooter,
+  ExporterPublicInfo,
   LegalDocType,
 } from './components/AtelierSection';
 import { CartDrawer, CartItem } from './components/CartDrawer';
@@ -50,6 +51,7 @@ export default function App() {
   const [externalOpenProductId, setExternalOpenProductId] = useState<string | null>(null);
   const [activeVoucherCode, setActiveVoucherCode] = useState<string>('');
   const [pixelConfig, setPixelConfig] = useState<MetaPixelConfig>(() => loadLocalPixelConfig());
+  const [exporterInfo, setExporterInfo] = useState<ExporterPublicInfo | null>(null);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [orderConfirmation, setOrderConfirmation] = useState<OrderConfirmationState | null>(null);
 
@@ -57,6 +59,12 @@ export default function App() {
   useEffect(() => {
     preloadGalleryImages(KHABIBI_COLORS.map((c) => c.frontImage));
     trackStoreEvent('page_view');
+    fetch('/api/exporter-info', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: ExporterPublicInfo | null) => {
+        if (d && d.companyName) setExporterInfo(d);
+      })
+      .catch(() => {});
   }, []);
 
   // Load authoritative Reverse-Shopify catalog from server (no-store so admin edits appear immediately)
@@ -580,6 +588,7 @@ export default function App() {
         <AtelierSectionAndFooter
           pixelConfigured={trackingActive}
           activeLegalDialog={legalDialog}
+          exporterInfo={exporterInfo}
           onChangeLegalDialog={setLegalDialog}
           onOpenPixelSettings={() => setPixelModalOpen(true)}
           onOpenAdminPanel={() => setAdminModalOpen(true)}
@@ -669,6 +678,7 @@ export default function App() {
             setSelectedColorId(fgColorId);
           }
         }}
+        onExporterUpdated={(nextExporter) => setExporterInfo(nextExporter)}
         onOpenPixelSettings={(activeAdminToken) => {
           if (activeAdminToken) setAdminSessionToken(activeAdminToken);
           setAdminModalOpen(false);

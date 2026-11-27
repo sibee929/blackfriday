@@ -7,8 +7,11 @@ import {
   BarChart3,
   Bell,
   Check,
+  Copy,
   Download,
   Edit3,
+  ExternalLink,
+  FileCheck2,
   Globe,
   ImagePlus,
   Lock,
@@ -23,11 +26,48 @@ import {
   ShoppingCart,
   Smartphone,
   Star,
+  Tag,
   Trash2,
+  Truck,
   Upload,
   X,
 } from 'lucide-react';
 import { ColorOption, JacketProduct } from '../data/catalog';
+import { ExporterPublicInfo } from './AtelierSection';
+
+interface OrderShippingAddress {
+  name: string;
+  street: string;
+  line2?: string;
+  zip: string;
+  city: string;
+  country: string;
+  phone?: string;
+}
+
+export interface ExporterSettings extends ExporterPublicInfo {
+  defaultWeightKg: number;
+  dispatchMode: 'casablanca_direct' | 'schoeneck_hub';
+}
+
+const DEFAULT_EXPORTER_SETTINGS: ExporterSettings = {
+  companyName: 'MRKSHI Atelier',
+  legalFormNote: 'SARL en cours de constitution',
+  street: 'Quartier Maarif, Casablanca',
+  cityZip: '20100 Casablanca',
+  country: 'Morocco',
+  iceNumber: 'En cours d’attribution',
+  email: 'service@mrkshi.com',
+  phoneMorocco: '',
+  phoneSupportDe: '+49 176 43488260',
+  returnNameDe: 'MRKSHI',
+  returnStreetDe: 'Alte Dorfstraße 3a',
+  returnCityZipDe: '61137 Schöneck',
+  defaultHsCode: '42031000',
+  defaultIncoterms: 'DDP',
+  defaultWeightKg: 1.35,
+  dispatchMode: 'casablanca_direct',
+};
 
 interface OrderItemRecord {
   productId: string;
@@ -45,6 +85,7 @@ interface OrderRecord {
   sessionId: string;
   mode: 'stripe' | 'preview';
   status: 'pending_payment' | 'paid' | 'cancelled';
+  customerName?: string;
   customerEmail: string;
   whatsappNumber: string;
   measurementsSummary: string;
@@ -55,6 +96,11 @@ interface OrderRecord {
   n8nSent: boolean;
   telegramSent: boolean;
   shippingSummary?: string;
+  shippingAddress?: OrderShippingAddress;
+  fulfillmentStatus?: 'unfulfilled' | 'in_production' | 'shipped';
+  carrier?: string;
+  trackingNumber?: string;
+  shippedAt?: string;
   createdAt: string;
   paidAt?: string;
 }
@@ -84,6 +130,7 @@ interface AdminStateResponse {
   orders: OrderRecord[];
   newsletter: NewsletterSubscriber[];
   oneEuroTestProductId: string | null;
+  exporterSettings?: ExporterSettings;
   integrations: AdminIntegrationsStatus;
 }
 
@@ -156,6 +203,7 @@ interface ReverseShopifyAdminProps {
   open: boolean;
   onClose: () => void;
   onCatalogUpdated: (nextProducts: JacketProduct[]) => void;
+  onExporterUpdated?: (nextExporter: ExporterPublicInfo) => void;
   onOpenPixelSettings: (activeAdminToken?: string | null) => void;
 }
 
@@ -194,6 +242,7 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
   open,
   onClose,
   onCatalogUpdated,
+  onExporterUpdated,
   onOpenPixelSettings,
 }) => {
   const [token, setToken] = useState<string | null>(null);
@@ -202,8 +251,26 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
   const [authError, setAuthError] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState<boolean>(false);
 
-  const [tab, setTab] = useState<'analytics' | 'orders' | 'products' | 'newsletter' | 'integrations'>('analytics');
+  const [tab, setTab] = useState<
+    'analytics' | 'orders' | 'logistics' | 'products' | 'newsletter' | 'integrations'
+  >('analytics');
   const [adminState, setAdminState] = useState<AdminStateResponse | null>(null);
+  const [exporterDraft, setExporterDraft] = useState<ExporterSettings>(DEFAULT_EXPORTER_SETTINGS);
+  const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
+  const [orderEditDraft, setOrderEditDraft] = useState<{
+    status: OrderRecord['status'];
+    fulfillmentStatus: NonNullable<OrderRecord['fulfillmentStatus']>;
+    carrier: string;
+    trackingNumber: string;
+    customerName: string;
+    customerEmail: string;
+    whatsappNumber: string;
+    street: string;
+    line2: string;
+    zip: string;
+    city: string;
+    country: string;
+  } | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsResponse | null>(null);
   const [analyticsDays, setAnalyticsDays] = useState<number>(7);
   const [busyAction, setBusyAction] = useState<string | null>(null);
@@ -251,6 +318,9 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
     if (!res.ok) return;
     const data = (await res.json()) as AdminStateResponse;
     setAdminState(data);
+    if (data.exporterSettings) {
+      setExporterDraft({ ...DEFAULT_EXPORTER_SETTINGS, ...data.exporterSettings });
+    }
   }, []);
 
   const loadAnalytics = useCallback(async (activeToken: string, days: number) => {
@@ -587,6 +657,236 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
     }
   };
 
+  const resolveConsignee = (order: OrderRecord) => {
+    const addr = order.shippingAddress;
+    const summaryParts = (order.shippingSummary ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const name =
+      addr?.name ||
+      order.customerName ||
+      summaryParts[0] ||
+      (order.customerEmail ? order.customerEmail.split('@')[0] : '') ||
+      'Bitte Empfängername eintragen';
+
+    const street = addr?.street || summaryParts[1] || '';
+    const line2 = addr?.line2 || '';
+    const zip = addr?.zip || '';
+    const city = addr?.city || summaryParts[2] || '';
+    const country = addr?.country || summaryParts[3] || 'Germany';
+    const zipCity = [zip, city].filter(Boolean).join(' ');
+    const phone =
+      addr?.phone ||
+      (order.whatsappNumber && order.whatsappNumber !== 'via Stripe Checkout'
+        ? order.whatsappNumber
+        : '');
+    const email = order.customerEmail || '';
+
+    return {
+      name,
+      street,
+      line2,
+      zip,
+      city,
+      zipCity,
+      country,
+      zipCityCountry: [zipCity, country].filter(Boolean).join(', '),
+      phone,
+      email,
+      hasFullAddress: Boolean(street && (zip || city)),
+    };
+  };
+
+  const handleSaveExporterSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token) return;
+    setBusyAction('save-exporter');
+    setToastMsg(null);
+    try {
+      const res = await fetch('/api/admin/exporter-settings', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(exporterDraft),
+      });
+      const data = (await res.json()) as {
+        exporterSettings?: ExporterSettings;
+        message?: string;
+        error?: string;
+      };
+      if (!res.ok || !data.exporterSettings) {
+        setToastMsg(data.error ?? 'Speichern fehlgeschlagen.');
+        return;
+      }
+      setExporterDraft(data.exporterSettings);
+      setAdminState((prev) =>
+        prev ? { ...prev, exporterSettings: data.exporterSettings } : prev
+      );
+      onExporterUpdated?.(data.exporterSettings);
+      setToastMsg(data.message ?? 'Exporteur- & Zoll-Einstellungen gespeichert.');
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleSyncStripeOrders = async () => {
+    if (!token) return;
+    setBusyAction('sync-stripe');
+    setToastMsg(null);
+    try {
+      const res = await fetch('/api/admin/orders/sync-stripe', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = (await res.json()) as {
+        orders?: OrderRecord[];
+        message?: string;
+        error?: string;
+      };
+      if (res.ok && data.orders) {
+        setAdminState((prev) => (prev ? { ...prev, orders: data.orders! } : prev));
+        setToastMsg(data.message ?? 'Stripe-Bestellungen synchronisiert.');
+      } else {
+        setToastMsg(data.error ?? 'Stripe-Synchronisierung fehlgeschlagen.');
+      }
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const openOrderEditor = (order: OrderRecord) => {
+    if (editingOrderId === order.id) {
+      setEditingOrderId(null);
+      setOrderEditDraft(null);
+      return;
+    }
+    const c = resolveConsignee(order);
+    setEditingOrderId(order.id);
+    setOrderEditDraft({
+      status: order.status,
+      fulfillmentStatus: order.fulfillmentStatus ?? 'unfulfilled',
+      carrier: order.carrier || 'DHL Express',
+      trackingNumber: order.trackingNumber || '',
+      customerName: c.name === 'Bitte Empfängername eintragen' ? '' : c.name,
+      customerEmail: c.email,
+      whatsappNumber: c.phone,
+      street: c.street,
+      line2: c.line2,
+      zip: c.zip,
+      city: c.city,
+      country: c.country || 'Germany',
+    });
+  };
+
+  const handleSaveOrderEdit = async (orderId: string) => {
+    if (!token || !orderEditDraft) return;
+    setBusyAction(`edit-ord-${orderId}`);
+    try {
+      const res = await fetch(`/api/admin/orders/${encodeURIComponent(orderId)}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          status: orderEditDraft.status,
+          fulfillmentStatus: orderEditDraft.fulfillmentStatus,
+          carrier: orderEditDraft.carrier,
+          trackingNumber: orderEditDraft.trackingNumber,
+          customerName: orderEditDraft.customerName,
+          customerEmail: orderEditDraft.customerEmail,
+          whatsappNumber: orderEditDraft.whatsappNumber,
+          shippingAddress: {
+            name: orderEditDraft.customerName,
+            street: orderEditDraft.street,
+            line2: orderEditDraft.line2,
+            zip: orderEditDraft.zip,
+            city: orderEditDraft.city,
+            country: orderEditDraft.country,
+            phone: orderEditDraft.whatsappNumber,
+          },
+        }),
+      });
+      const data = (await res.json()) as {
+        orders?: OrderRecord[];
+        message?: string;
+        error?: string;
+      };
+      if (res.ok && data.orders) {
+        setAdminState((prev) => (prev ? { ...prev, orders: data.orders! } : prev));
+        setEditingOrderId(null);
+        setOrderEditDraft(null);
+        setToastMsg(data.message ?? 'Bestelldaten gespeichert.');
+      } else {
+        setToastMsg(data.error ?? 'Speichern fehlgeschlagen.');
+      }
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleQuickFulfillment = async (
+    orderId: string,
+    fulfillmentStatus: 'unfulfilled' | 'in_production' | 'shipped'
+  ) => {
+    if (!token) return;
+    setBusyAction(`fulfill-${orderId}`);
+    try {
+      const res = await fetch(`/api/admin/orders/${encodeURIComponent(orderId)}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ fulfillmentStatus }),
+      });
+      const data = (await res.json()) as { orders?: OrderRecord[] };
+      if (res.ok && data.orders) {
+        setAdminState((prev) => (prev ? { ...prev, orders: data.orders! } : prev));
+        setToastMsg(`Versandstatus für ${orderId} aktualisiert.`);
+      }
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleCopyRecipient = async (order: OrderRecord) => {
+    const c = resolveConsignee(order);
+    const block = [
+      c.name,
+      c.street,
+      c.line2,
+      [c.zip, c.city].filter(Boolean).join(' '),
+      c.country,
+      c.phone ? `Tel: ${c.phone}` : '',
+      c.email ? `E-Mail: ${c.email}` : '',
+      `Ref: ${order.id}`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+    try {
+      await navigator.clipboard.writeText(block);
+      setToastMsg(`Empfängerdaten (${order.id}) für MyDHL+ / DHL.de in die Zwischenablage kopiert.`);
+    } catch {
+      setToastMsg('Kopieren nicht möglich – bitte manuell markieren.');
+    }
+  };
+
+  const getCustomsMaterialLabel = (productId: string) => {
+    const prod = adminState?.products.find((p) => p.id === productId);
+    if (prod?.leatherType === 'Wildleder' || prod?.leatherType === 'Rind-Wildleder') {
+      return '100% Suede Genuine Leather Jacket';
+    }
+    if (prod?.leatherType === 'Vollrind-Nappa') {
+      return '100% Cowhide Genuine Leather Jacket';
+    }
+    return '100% Lambskin Leather Jacket';
+  };
+
   const handlePrintInvoice = (order: OrderRecord) => {
     const esc = (s: string) =>
       String(s ?? '')
@@ -594,79 +894,318 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
     const eur = (cents: number) => (cents / 100).toFixed(2).replace('.', ',') + ' €';
+
+    const exp = adminState?.exporterSettings ?? exporterDraft ?? DEFAULT_EXPORTER_SETTINGS;
+    const sellerTitle = exp.legalFormNote
+      ? `${exp.companyName} (${exp.legalFormNote})`
+      : exp.companyName;
+    const deReturnFull = `${exp.returnNameDe}, ${exp.returnStreetDe}, ${exp.returnCityZipDe}`;
+    const hsCode = exp.defaultHsCode || '42031000';
+    const incotermsLabel =
+      exp.defaultIncoterms === 'DAP'
+        ? 'DAP (Delivered at Place)'
+        : 'DDP (Delivered Duty Paid)';
+
+    const consignee = resolveConsignee(order);
     const gross = order.totalCents;
     const net = Math.round(gross / 1.19);
     const vat = gross - net;
     const itemsSum = order.items.reduce((s, i) => s + i.unitAmountCents * i.quantity, 0);
     const discount = Math.max(0, itemsSum - gross);
+    const ratio = itemsSum > 0 ? gross / itemsSum : 1;
+    const totalQty = order.items.reduce((s, i) => s + i.quantity, 0);
+    const totalWeightStr = (totalQty * (exp.defaultWeightKg || 1.35)).toFixed(2).replace('.', ',');
     const date = new Date(order.paidAt ?? order.createdAt).toLocaleDateString('de-DE');
+
     const rows = order.items
-      .map(
-        (i, idx) => `<tr>
+      .map((i, idx) => {
+        const lineGross = Math.round(i.unitAmountCents * i.quantity * ratio);
+        const lineNet = Math.round(lineGross / 1.19);
+        const matDesc = getCustomsMaterialLabel(i.productId);
+        return `<tr>
           <td>${idx + 1}</td>
-          <td><strong>${esc(i.name)}</strong><br/><small>Farbe: ${esc(i.colorName)} · Größe: ${esc(
-          i.sizeLabel
-        )}${i.customMeasure ? ' · ' + esc(i.customMeasure) : ''}</small></td>
+          <td>
+            <strong>${esc(i.name)} – ${esc(matDesc)}</strong><br/>
+            <span class="sub">Farbe: ${esc(i.colorName)} · Größe: ${esc(i.sizeLabel)}${
+          i.customMeasure ? ' · Maßanfertigung: ' + esc(i.customMeasure) : ''
+        } · <strong>Origin: Morocco</strong></span>
+          </td>
+          <td class="c mono">${esc(hsCode)}</td>
           <td class="r">${i.quantity}</td>
-          <td class="r">${eur(i.unitAmountCents)}</td>
-          <td class="r">${eur(i.unitAmountCents * i.quantity)}</td>
-        </tr>`
+          <td class="r">${eur(lineNet)}</td>
+          <td class="r"><strong>${eur(lineGross)}</strong></td>
+        </tr>`;
+      })
+      .join('');
+
+    const unpaidWarning =
+      order.status !== 'paid' || !consignee.hasFullAddress
+        ? `<div class="noprint" style="margin-bottom:14px;padding:12px 14px;background:#FEF2F2;border:2px solid #DC2626;color:#991B1B;font-size:12.5px;border-radius:8px">
+            <strong>⚠️ Wichtig vor dem Zolldruck:</strong>
+            ${
+              order.status !== 'paid'
+                ? 'Zahlungsstatus steht noch auf „Offen“. Klicke im Dashboard auf „Stripe-Daten synchronisieren“ oder bearbeite die Bestellung auf „Bezahlt“. '
+                : ''
+            }
+            ${
+              !consignee.hasFullAddress
+                ? 'Empfänger-Straße/PLZ fehlt noch — bitte über „Adresse & Tracking bearbeiten“ ergänzen!'
+                : ''
+            }
+          </div>`
+        : '';
+
+    const html = `<!doctype html><html lang="de"><head><meta charset="utf-8"/>
+      <title>Rechnung &amp; Commercial Invoice ${esc(order.id)}</title>
+      <style>
+        *{box-sizing:border-box}
+        body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:0;padding:32px 38px;font-size:12.5px;line-height:1.45}
+        .top{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #000;padding-bottom:14px;gap:24px}
+        .brand{font-size:28px;font-weight:900;letter-spacing:.06em;line-height:1}
+        .sub{color:#444;font-size:11.5px}
+        .mono{font-family:Consolas,Monaco,monospace}
+        h1{font-size:18px;margin:20px 0 12px;text-transform:uppercase;letter-spacing:.02em}
+        .meta-grid{display:flex;justify-content:space-between;gap:24px;margin-top:8px;padding:12px 14px;background:#F8F8F8;border:1px solid #DDD}
+        table{width:100%;border-collapse:collapse;margin-top:18px}
+        th{background:#000;color:#fff;text-align:left;padding:8px 9px;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em}
+        td{padding:9px;border-bottom:1px solid #DDD;vertical-align:top}
+        .r{text-align:right} .c{text-align:center}
+        .totals{width:380px;margin-left:auto;margin-top:12px;border-collapse:collapse}
+        .totals td{border:none;padding:4px 8px}
+        .customs-net td{background:#F3F4F6;font-weight:700;border-top:1px solid #000;border-bottom:1px solid #000;padding:6px 8px}
+        .grand td{font-size:15px;font-weight:900;border-top:2px solid #000;padding-top:8px}
+        .origin-box{margin-top:20px;padding:12px 14px;border:1.5px solid #000;background:#FAFAFA;font-size:11.5px}
+        .sig-row{margin-top:16px;display:flex;justify-content:space-between;align-items:flex-end;gap:20px;font-size:11.5px}
+        .foot{margin-top:22px;border-top:1px solid #CCC;padding-top:10px;font-size:10.8px;color:#444;line-height:1.5}
+        @media print{body{padding:12mm 14mm} .noprint{display:none}}
+      </style></head><body>
+      <div class="noprint" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:12px">
+        <span style="font-size:12px;color:#444"><strong>Tipp für Marokko-Zoll:</strong> 1× für Kunden (PDF/Paket) + <strong>3× unterschrieben außen ans Paket</strong> in Klarsichttasche („Customs Documents Enclosed“).</span>
+        <button onclick="window.print()" style="padding:9px 18px;background:#000;color:#fff;border:0;font-weight:700;cursor:pointer;border-radius:6px;white-space:nowrap">Drucken / als PDF speichern</button>
+      </div>
+      ${unpaidWarning}
+
+      <div class="top">
+        <div>
+          <div class="brand">MRKSHI</div>
+          <div class="sub" style="margin-top:4px;font-weight:700;color:#111">Lederatelier · Casablanca × Deutschland</div>
+        </div>
+        <div class="r" style="font-size:11.8px;max-width:340px">
+          <strong>Verkäufer / Exporter:</strong><br/>
+          <strong>${esc(sellerTitle)}</strong><br/>
+          ${esc(exp.street)}<br/>
+          ${esc(exp.cityZip)}, ${esc(exp.country)}<br/>
+          ICE: <span class="mono">${esc(exp.iceNumber)}</span> | E-Mail: ${esc(exp.email)}
+          ${exp.phoneMorocco ? `<br/>Tel (MA): ${esc(exp.phoneMorocco)}` : ''}
+        </div>
+      </div>
+
+      <h1>Rechnung &amp; Handelsrechnung (Invoice / Commercial Invoice)</h1>
+
+      <div class="meta-grid">
+        <div style="flex:1">
+          <strong>Rechnungs- &amp; Lieferadresse (Consignee):</strong><br/>
+          <strong>${esc(consignee.name)}</strong><br/>
+          ${consignee.street ? `${esc(consignee.street)}<br/>` : ''}
+          ${consignee.line2 ? `${esc(consignee.line2)}<br/>` : ''}
+          ${consignee.zipCityCountry ? `${esc(consignee.zipCityCountry)}<br/>` : ''}
+          ${consignee.phone ? `Tel: ${esc(consignee.phone)}` : ''}
+          ${consignee.phone && consignee.email ? ' · ' : ''}
+          ${consignee.email ? `E-Mail: ${esc(consignee.email)}` : ''}
+        </div>
+        <div class="r" style="min-width:255px">
+          <strong>Rechnungsnummer:</strong> <span class="mono">${esc(order.id)}</span><br/>
+          <strong>Rechnungsdatum:</strong> ${date}<br/>
+          <strong>Zahlungsstatus:</strong> ${
+            order.status === 'paid'
+              ? '<strong>Bezahlt (Stripe)</strong> (Payment Status: <strong>Paid</strong>)'
+              : 'Offen (Payment Status: Pending)'
+          }<br/>
+          <strong>Incoterms:</strong> <strong>${esc(incotermsLabel)}</strong><br/>
+          <strong>Country of Origin:</strong> Morocco (MA) · <strong>Weight:</strong> ${totalWeightStr} kg
+          ${order.trackingNumber ? `<br/><strong>Tracking (${esc(order.carrier || 'DHL')}):</strong> <span class="mono">${esc(order.trackingNumber)}</span>` : ''}
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width:32px">#</th>
+            <th>Artikel / Description of Goods</th>
+            <th class="c" style="width:92px">HS Code</th>
+            <th class="r" style="width:58px">Menge</th>
+            <th class="r" style="width:95px">Netto</th>
+            <th class="r" style="width:95px">Brutto</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+
+      <table class="totals">
+        ${
+          discount > 0
+            ? `<tr><td>Zwischensumme (Brutto)</td><td class="r">${eur(itemsSum)}</td></tr>
+               <tr><td>Gutschein-Rabatt</td><td class="r">-${eur(discount)}</td></tr>`
+            : ''
+        }
+        <tr class="customs-net">
+          <td>Zollwert / Netto-Warenwert (Customs Value Net):</td>
+          <td class="r">${eur(net)}</td>
+        </tr>
+        <tr>
+          <td>Versand (${esc(exp.defaultIncoterms)} Kurier inkl. Zollabwicklung):</td>
+          <td class="r">0,00 €</td>
+        </tr>
+        <tr>
+          <td>zzgl. 19 % deutsche MwSt. (VAT):</td>
+          <td class="r">${eur(vat)}</td>
+        </tr>
+        <tr class="grand">
+          <td>Gesamtbetrag (Total Gross Paid):</td>
+          <td class="r">${eur(gross)}</td>
+        </tr>
+      </table>
+
+      ${
+        order.giftNote
+          ? `<p class="sub" style="margin-top:10px"><strong>Bestellhinweis:</strong> ${esc(order.giftNote)}</p>`
+          : ''
+      }
+
+      <div class="origin-box">
+        <strong>Customs Origin Declaration (Präferenzursprungserklärung EU–Marokko):</strong><br/>
+        "The exporter of the products covered by this document declares that, except where otherwise clearly indicated, these products are of <strong>Morocco preferential origin</strong>."
+        <div class="sig-row">
+          <div><strong>Place &amp; Date:</strong> Casablanca, ${date}</div>
+          <div><strong>Signature / Stamp:</strong> ___________________________________</div>
+        </div>
+      </div>
+
+      <div class="foot">
+        Vielen Dank für deinen Einkauf bei MRKSHI. <strong>Widerrufsrecht:</strong> 14 Tage ab Erhalt der Ware bei Standardgrößen (kein Widerrufsrecht bei individuellen Maßanfertigungen gem. § 312g Abs. 2 Nr. 1 BGB). <strong>Rücksendeadresse Deutschland:</strong> ${esc(deReturnFull)}.
+      </div>
+      <script>setTimeout(function(){window.print()},400)</script>
+      </body></html>`;
+
+    const w = window.open('', '_blank', 'width=940,height=1120');
+    if (!w) {
+      setToastMsg('Pop-up blockiert – bitte Pop-ups für mrkshi.com erlauben.');
+      return;
+    }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+  };
+
+  const handlePrintShippingLabel = (order: OrderRecord) => {
+    const esc = (s: string) =>
+      String(s ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    const eur = (cents: number) => (cents / 100).toFixed(2).replace('.', ',') + ' EUR';
+    const exp = adminState?.exporterSettings ?? exporterDraft ?? DEFAULT_EXPORTER_SETTINGS;
+    const consignee = resolveConsignee(order);
+    const net = Math.round(order.totalCents / 1.19);
+    const totalQty = order.items.reduce((s, i) => s + i.quantity, 0);
+    const weightStr = (totalQty * (exp.defaultWeightKg || 1.35)).toFixed(2);
+    const date = new Date().toLocaleDateString('de-DE');
+
+    const senderLines =
+      exp.dispatchMode === 'schoeneck_hub'
+        ? `${esc(exp.returnNameDe)} · ${esc(exp.returnStreetDe)} · ${esc(exp.returnCityZipDe)} · Germany`
+        : `${esc(exp.companyName)} · ${esc(exp.street)} · ${esc(exp.cityZip)} · ${esc(exp.country)}`;
+
+    const itemsChecklist = order.items
+      .map(
+        (i) =>
+          `<li>☐ <strong>${i.quantity}× ${esc(i.name)}</strong> — Farbe: <strong>${esc(
+            i.colorName
+          )}</strong> · Größe: <strong>${esc(i.sizeLabel)}</strong>${
+            i.customMeasure ? `<br/>&nbsp;&nbsp;&nbsp;&nbsp;📏 Sondermaß: <strong>${esc(i.customMeasure)}</strong>` : ''
+          }${i.giftWrap ? ' · 🎁 Geschenkbox' : ''}</li>`
       )
       .join('');
 
     const html = `<!doctype html><html lang="de"><head><meta charset="utf-8"/>
-      <title>Rechnung ${esc(order.id)}</title>
+      <title>Paket-Zettel &amp; Aufkleber ${esc(order.id)}</title>
       <style>
-        *{box-sizing:border-box} body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:0;padding:40px;font-size:13px}
-        .top{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #000;padding-bottom:18px}
-        .brand{font-size:30px;font-weight:900;letter-spacing:.06em}
-        h1{font-size:22px;margin:28px 0 6px} .muted{color:#555}
-        .grid{display:flex;justify-content:space-between;margin-top:18px;gap:30px}
-        table{width:100%;border-collapse:collapse;margin-top:24px}
-        th{background:#000;color:#fff;text-align:left;padding:9px;font-size:12px}
-        td{padding:9px;border-bottom:1px solid #ddd;vertical-align:top}
-        .r{text-align:right} .tot td{border:none;padding:5px 9px}
-        .grand td{font-size:16px;font-weight:900;border-top:2px solid #000}
-        .foot{margin-top:40px;border-top:1px solid #ccc;padding-top:12px;font-size:11px;color:#555}
-        @media print{body{padding:18mm} .noprint{display:none}}
+        *{box-sizing:border-box}
+        body{font-family:Arial,Helvetica,sans-serif;color:#000;margin:0;padding:24px;font-size:13px}
+        .label-card{border:3px solid #000;padding:18px;max-width:620px;margin:0 auto 22px}
+        .cut{border-top:2px dashed #666;margin:20px auto;max-width:620px;text-align:center;font-size:11px;color:#555;padding-top:4px}
+        .pack-card{border:1.5px solid #000;padding:16px;max-width:620px;margin:0 auto;font-size:12.5px}
+        .badge{display:inline-block;background:#000;color:#fff;font-weight:900;padding:4px 10px;font-size:13px;letter-spacing:.05em}
+        @media print{body{padding:8mm} .noprint{display:none}}
       </style></head><body>
-      <div class="noprint" style="text-align:right;margin-bottom:16px">
-        <button onclick="window.print()" style="padding:10px 18px;background:#000;color:#fff;border:0;font-weight:700;cursor:pointer">Drucken / als PDF speichern</button>
+      <div class="noprint" style="max-width:620px;margin:0 auto 16px;display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:12px">Oben: <strong>Außen aufs Paket kleben</strong> · Unten: <strong>Atelier-Packzettel (ins Paket)</strong></span>
+        <button onclick="window.print()" style="padding:9px 16px;background:#000;color:#fff;border:0;font-weight:700;cursor:pointer;border-radius:6px">Zettel jetzt drucken</button>
       </div>
-      <div class="top">
-        <div><div class="brand">MRKSHI</div><div class="muted">Lederatelier · Marrakesch × Deutschland</div></div>
-        <div class="r muted">MRKSHI Lederatelier<br/>Alte Dorfstraße 3a<br/>61137 Schöneck<br/>service@mrkshi.com<br/>+49 176 43488260</div>
-      </div>
-      <h1>Rechnung ${esc(order.id)}</h1>
-      <div class="grid">
-        <div><strong>Rechnung an:</strong><br/>${esc(order.customerEmail || 'Lt. Stripe-Beleg')}<br/>${esc(
-      order.whatsappNumber || ''
-    )}<br/><span class="muted">${esc(order.shippingSummary || 'Lieferadresse lt. Stripe-Checkout')}</span></div>
-        <div class="r">
-          <strong>Rechnungsdatum:</strong> ${date}<br/>
-          <strong>Bestellnummer:</strong> ${esc(order.id)}<br/>
-          <strong>Status:</strong> ${order.status === 'paid' ? 'Bezahlt' : 'Offen'}<br/>
-          <strong>Zahlung:</strong> Stripe (${esc(order.mode)})
+
+      <div class="label-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #000;padding-bottom:10px">
+          <div>
+            <span class="badge">MRKSHI PARCEL</span>
+            <span style="margin-left:8px;font-family:monospace;font-weight:900;font-size:16px">${esc(order.id)}</span>
+          </div>
+          <div style="text-align:right;font-size:11px;font-weight:700">
+            INCOTERMS: ${esc(exp.defaultIncoterms)}<br/>ORIGIN: MOROCCO (MA)
+          </div>
+        </div>
+
+        <div style="font-size:11px;color:#333;padding:8px 0;border-bottom:1px solid #CCC">
+          <strong>FROM / ABSENDER:</strong> ${senderLines}
+        </div>
+
+        <div style="padding:14px 0;border-bottom:2px solid #000">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#444">SHIP TO / EMPFÄNGER (CONSIGNEE):</div>
+          <div style="font-size:21px;font-weight:900;margin-top:4px">${esc(consignee.name)}</div>
+          <div style="font-size:17px;font-weight:700;margin-top:2px">${esc(consignee.street || '— Straße fehlt —')}</div>
+          ${consignee.line2 ? `<div style="font-size:15px">${esc(consignee.line2)}</div>` : ''}
+          <div style="font-size:19px;font-weight:900;margin-top:4px">${esc(consignee.zipCity)}</div>
+          <div style="font-size:16px;font-weight:900;text-transform:uppercase;letter-spacing:.05em">${esc(consignee.country)}</div>
+          <div style="margin-top:8px;font-size:13px;font-weight:700">
+            📞 Tel (Kurier): ${esc(consignee.phone || '—')} &nbsp;|&nbsp; ✉️ ${esc(consignee.email || '—')}
+          </div>
+        </div>
+
+        <div style="padding-top:10px;font-size:11.5px;display:flex;justify-content:space-between;gap:12px">
+          <div>
+            <strong>CN23 / CUSTOMS SUMMARY:</strong><br/>
+            Description: Men's 100% Genuine Leather Jacket<br/>
+            HS Code: <strong>${esc(exp.defaultHsCode)}</strong> · Origin: <strong>Morocco</strong>
+          </div>
+          <div style="text-align:right">
+            Customs Net Value: <strong>${eur(net)}</strong><br/>
+            Qty: <strong>${totalQty} pcs</strong> · Weight: <strong>${weightStr} kg</strong><br/>
+            Payment: <strong>${order.status === 'paid' ? 'PAID' : 'PENDING'}</strong>
+          </div>
         </div>
       </div>
-      <table>
-        <thead><tr><th>#</th><th>Artikel</th><th class="r">Menge</th><th class="r">Einzelpreis</th><th class="r">Gesamt</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-      <table style="width:320px;margin-left:auto;margin-top:12px">
-        <tr class="tot"><td>Zwischensumme</td><td class="r">${eur(itemsSum)}</td></tr>
-        ${discount > 0 ? `<tr class="tot"><td>Rabatt</td><td class="r">-${eur(discount)}</td></tr>` : ''}
-        <tr class="tot"><td>Versand (DHL Express)</td><td class="r">0,00 €</td></tr>
-        <tr class="tot"><td>Netto</td><td class="r">${eur(net)}</td></tr>
-        <tr class="tot"><td>zzgl. 19 % MwSt.</td><td class="r">${eur(vat)}</td></tr>
-        <tr class="grand"><td>Gesamtbetrag</td><td class="r">${eur(gross)}</td></tr>
-      </table>
-      ${order.giftNote ? `<p class="muted" style="margin-top:20px"><strong>Hinweis:</strong> ${esc(order.giftNote)}</p>` : ''}
-      <div class="foot">Vielen Dank für deinen Einkauf bei MRKSHI. Widerrufsrecht: 14 Tage ab Erhalt der Ware (Standardgrößen). Rücksendung an MRKSHI, Alte Dorfstraße 3a, 61137 Schöneck.</div>
-      <script>setTimeout(function(){window.print()},400)</script>
+
+      <div class="cut">✂️ HIER SCHNEIDEN — OBEREN TEIL AUSSEN AUFS PAKET (+ 3× RECHNUNG IN KLARSICHTTASCHE) · UNTEREN TEIL INS PAKET LEGEN ✂️</div>
+
+      <div class="pack-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1.5px solid #000;padding-bottom:8px">
+          <strong style="font-size:16px">MRKSHI ATELIER — LIEFERSCHEIN &amp; QUALITÄTSCHECK</strong>
+          <span style="font-family:monospace;font-weight:700">${esc(order.id)} · ${date}</span>
+        </div>
+        <ul style="list-style:none;padding:0;margin:12px 0;line-height:1.7">${itemsChecklist}</ul>
+        ${
+          order.measurementsSummary
+            ? `<div style="padding:8px 10px;background:#F4F4F4;border-left:3px solid #000;margin-bottom:10px"><strong>Maßchecker-Angaben:</strong> ${esc(order.measurementsSummary)}</div>`
+            : ''
+        }
+        <div style="font-size:11.5px;border-top:1px solid #DDD;padding-top:8px;color:#333">
+          <strong>Pack-Checkliste vor Versand:</strong> ☐ Leder &amp; Reißverschlüsse geprüft &nbsp; ☐ Größe/Maße kontrolliert &nbsp; ☐ 3× unterschriebene Handelsrechnung außen angebracht<br/><br/>
+          <strong>Für den Kunden — Rückgabe &amp; Support:</strong> Fragen zur Passform? Schreib uns jederzeit per WhatsApp an <strong>${esc(exp.phoneSupportDe)}</strong> oder <strong>${esc(exp.email)}</strong>. Rücksendeadresse Deutschland (14 Tage bei Standardgrößen): <strong>${esc(exp.returnNameDe)}, ${esc(exp.returnStreetDe)}, ${esc(exp.returnCityZipDe)}</strong>.
+        </div>
+      </div>
+      <script>setTimeout(function(){window.print()},350)</script>
       </body></html>`;
 
-    const w = window.open('', '_blank', 'width=900,height=1100');
+    const w = window.open('', '_blank', 'width=820,height=1050');
     if (!w) {
       setToastMsg('Pop-up blockiert – bitte Pop-ups für mrkshi.com erlauben.');
       return;
@@ -682,6 +1221,19 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
       `Hallo! Danke für deine MRKSHI Bestellung ${order.id} (${order.items
         .map((i) => `${i.name} · ${i.colorName} (${i.sizeLabel})`)
         .join(', ')}). Wir prüfen kurz deine Maße (${order.measurementsSummary || 'Standard'}) vor dem Zuschnitt in Marokko.`
+    );
+    return `https://wa.me/${cleaned}?text=${msg}`;
+  };
+
+  const formatWhatsappTrackingHref = (phone: string, order: OrderRecord) => {
+    const cleaned = phone.replace(/[^\d]/g, '');
+    const carrier = order.carrier || 'DHL';
+    const trk = order.trackingNumber || '';
+    const trackUrl = carrier.toLowerCase().includes('ups')
+      ? `https://www.ups.com/track?tracknum=${encodeURIComponent(trk)}`
+      : `https://www.dhl.de/de/privatkunden/pakete-empfangen/verfolgen.html?piececode=${encodeURIComponent(trk)}`;
+    const msg = encodeURIComponent(
+      `Gute Nachrichten! Deine handgefertigte MRKSHI Lederjacke (${order.id}) ist unterwegs mit ${carrier}. Deine Sendungsnummer lautet: ${trk} — Live-Tracking: ${trackUrl}`
     );
     return `https://wa.me/${cleaned}?text=${msg}`;
   };
@@ -713,7 +1265,7 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
               MRKSHI SELLER STUDIO · MRKSHI.COM
             </p>
             <h2 className="text-[20px] font-bold text-black font-masculine">
-              Analyse, Produkt-Studio, Bestellungen & Rechnungen
+              Analyse, Produkt-Studio, Bestellungen, Zoll-Rechnung &amp; Logistik
             </h2>
           </div>
           <button
@@ -738,8 +1290,8 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
                 : 'MRKSHI Verkäufer-Login'}
             </h3>
             <p className="mt-1.5 text-[13.5px] text-neutral-600">
-              Gib dein Admin-Passwort ein, um Live-Analysen, Produktbilder, Lagerbestand und
-              Rechnungen zu verwalten.
+              Gib dein Admin-Passwort ein, um Live-Analysen, Produktbilder, Lagerbestand,
+              Zoll-Rechnungen und Paket-Zettel zu verwalten.
             </p>
 
             <form onSubmit={handleAuthSubmit} className="mt-5 space-y-3">
@@ -774,14 +1326,19 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
                     icon: BarChart3,
                   },
                   {
-                    id: 'products' as const,
-                    label: `Produkt-Studio (${adminState?.products.length ?? 0})`,
-                    icon: Package,
-                  },
-                  {
                     id: 'orders' as const,
                     label: `Bestellungen (${adminState?.orders.length ?? 0})`,
                     icon: ShoppingCart,
+                  },
+                  {
+                    id: 'logistics' as const,
+                    label: 'Logistik & Zoll (SARL)',
+                    icon: Truck,
+                  },
+                  {
+                    id: 'products' as const,
+                    label: `Produkt-Studio (${adminState?.products.length ?? 0})`,
+                    icon: Package,
                   },
                   {
                     id: 'newsletter' as const,
@@ -2226,9 +2783,53 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
                 </div>
               )}
 
-              {/* ================= TAB 3: ORDERS & INVOICES ================= */}
+              {/* ================= TAB 3: ORDERS, COMMERCIAL INVOICE & PARCEL LABELS ================= */}
               {tab === 'orders' && (
                 <div className="space-y-4">
+                  {/* Top Action Bar for Orders */}
+                  <div className="p-3.5 rounded-xl bg-neutral-50 border border-black/12 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h4 className="text-[14px] font-bold text-black">
+                        Bestellungen, Zoll-Handelsrechnungen &amp; Paket-Aufkleber
+                      </h4>
+                      <p className="text-[12px] text-neutral-600">
+                        Exporteur aktuell:{' '}
+                        <strong>
+                          {(adminState?.exporterSettings ?? exporterDraft).companyName}
+                        </strong>{' '}
+                        ({(adminState?.exporterSettings ?? exporterDraft).cityZip}) · Incoterms:{' '}
+                        <strong>
+                          {(adminState?.exporterSettings ?? exporterDraft).defaultIncoterms}
+                        </strong>{' '}
+                        · HS-Code:{' '}
+                        <span className="font-mono">
+                          {(adminState?.exporterSettings ?? exporterDraft).defaultHsCode}
+                        </span>
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={busyAction === 'sync-stripe'}
+                        onClick={handleSyncStripeOrders}
+                        className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-white border border-black/20 text-[12px] font-semibold hover:border-black cursor-pointer"
+                      >
+                        <RefreshCw
+                          className={`w-3.5 h-3.5 ${busyAction === 'sync-stripe' ? 'animate-spin' : ''}`}
+                        />
+                        <span>Stripe-Zahlungen &amp; Adressen synchronisieren</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTab('logistics')}
+                        className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-black text-white text-[12px] font-semibold hover:bg-neutral-800 cursor-pointer"
+                      >
+                        <Truck className="w-3.5 h-3.5" />
+                        <span>SARL &amp; Online-Versand einrichten</span>
+                      </button>
+                    </div>
+                  </div>
+
                   {!adminState || adminState.orders.length === 0 ? (
                     <div className="py-14 text-center text-neutral-500">
                       <p className="text-[15px] font-semibold text-black">
@@ -2236,119 +2837,814 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
                       </p>
                     </div>
                   ) : (
-                    adminState.orders.map((order) => (
-                      <div
-                        key={order.id}
-                        className="p-4 rounded-xl border border-black/12 bg-white space-y-3"
-                      >
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="flex items-center gap-2.5">
-                            <span className="font-mono text-[13px] font-bold text-black">
-                              {order.id}
-                            </span>
-                            <span
-                              className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
-                                order.status === 'paid'
-                                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                                  : 'bg-amber-50 text-amber-800 border border-amber-200'
-                              }`}
-                            >
-                              {order.status === 'paid' ? 'Bezahlt' : 'Offen (Stripe)'}
-                            </span>
-                            <span className="text-[11.5px] text-neutral-500">
-                              {new Date(order.createdAt).toLocaleString('de-DE')}
-                            </span>
-                          </div>
+                    adminState.orders.map((order) => {
+                      const consignee = resolveConsignee(order);
+                      const netEur = (Math.round(order.totalCents / 1.19) / 100)
+                        .toFixed(2)
+                        .replace('.', ',');
+                      const fulfill = order.fulfillmentStatus ?? 'unfulfilled';
+                      const isEditingThis = editingOrderId === order.id && orderEditDraft;
 
-                          <span className="text-[16px] font-bold tabular-nums text-black">
-                            {(order.totalCents / 100).toFixed(2).replace('.', ',')} €
-                          </span>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[12.5px]">
-                          <div className="p-3 rounded-lg bg-neutral-50 space-y-1">
-                            <p>
-                              <strong>E-Mail:</strong>{' '}
-                              {order.customerEmail || 'Wird über Stripe erfasst'}
-                            </p>
-                            <p>
-                              <strong>Telefon / WhatsApp:</strong>{' '}
-                              {order.whatsappNumber || 'Lt. Stripe Checkout'}
-                            </p>
-                            {order.shippingSummary && (
-                              <p>
-                                <strong>Lieferadresse:</strong> {order.shippingSummary}
-                              </p>
-                            )}
-                            <p>
-                              <strong>Maßchecker:</strong>{' '}
-                              {order.measurementsSummary || 'Standardgröße'}
-                            </p>
-                            {order.giftNote && (
-                              <p>
-                                <strong>Notiz:</strong> {order.giftNote}
-                              </p>
-                            )}
-                          </div>
-
-                          <div className="p-3 rounded-lg bg-neutral-50 space-y-1">
-                            {order.items.map((item, idx) => (
-                              <p key={idx}>
-                                {item.quantity}× <strong>{item.name}</strong> — {item.colorName} ·{' '}
-                                {item.sizeLabel}{' '}
-                                {item.customMeasure ? `(${item.customMeasure})` : ''}
-                              </p>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                          <div className="flex items-center gap-2 text-[11.5px]">
-                            <span
-                              className={`px-2 py-0.5 rounded border ${
-                                order.n8nSent
-                                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                                  : 'bg-neutral-50 border-black/10 text-neutral-600'
-                              }`}
-                            >
-                              n8n: {order.n8nSent ? 'Gesendet' : 'Ausstehend'}
-                            </span>
-                          </div>
-
-                          <div className="flex flex-wrap items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => handlePrintInvoice(order)}
-                              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-black text-white text-[12px] font-semibold hover:bg-neutral-800 cursor-pointer"
-                            >
-                              <Printer className="w-3.5 h-3.5" />
-                              <span>Rechnung drucken</span>
-                            </button>
-                            {order.whatsappNumber && (
-                              <a
-                                href={formatWhatsappHref(order.whatsappNumber, order)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-[#25D366]/15 text-[#126E35] border border-[#25D366]/35 text-[12px] font-semibold"
+                      return (
+                        <div
+                          key={order.id}
+                          className="p-4 rounded-xl border border-black/15 bg-white space-y-3 shadow-2xs"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-mono text-[13.5px] font-bold text-black">
+                                {order.id}
+                              </span>
+                              <span
+                                className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                                  order.status === 'paid'
+                                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                    : 'bg-amber-50 text-amber-800 border border-amber-200'
+                                }`}
                               >
-                                <MessageCircle className="w-3.5 h-3.5" />
-                                <span>WhatsApp</span>
-                              </a>
-                            )}
-                            <button
-                              type="button"
-                              disabled={busyAction === `notify-${order.id}`}
-                              onClick={() => handleNotifyOrder(order.id)}
-                              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-black/20 text-[12px] font-medium hover:border-black cursor-pointer"
-                            >
-                              <Send className="w-3.5 h-3.5" />
-                              <span>An n8n senden</span>
-                            </button>
+                                {order.status === 'paid' ? '✓ Bezahlt (Stripe)' : '⏳ Offen'}
+                              </span>
+                              <span
+                                className={`px-2 py-0.5 rounded text-[11px] font-semibold border ${
+                                  fulfill === 'shipped'
+                                    ? 'bg-blue-50 text-blue-800 border-blue-200'
+                                    : fulfill === 'in_production'
+                                    ? 'bg-purple-50 text-purple-800 border-purple-200'
+                                    : 'bg-neutral-100 text-neutral-700 border-black/10'
+                                }`}
+                              >
+                                {fulfill === 'shipped'
+                                  ? `📦 Versendet${order.trackingNumber ? ` (${order.trackingNumber})` : ''}`
+                                  : fulfill === 'in_production'
+                                  ? '✂️ Im Zuschnitt'
+                                  : '📋 Versand offen'}
+                              </span>
+                              <span className="text-[11.5px] text-neutral-500">
+                                {new Date(order.createdAt).toLocaleString('de-DE')}
+                              </span>
+                            </div>
+
+                            <div className="text-right">
+                              <span className="text-[16px] font-bold tabular-nums text-black">
+                                {(order.totalCents / 100).toFixed(2).replace('.', ',')} €
+                              </span>
+                              <span className="block text-[11px] text-emerald-800 font-semibold">
+                                Zollwert Netto: {netEur} €
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[12.5px]">
+                            <div className="p-3 rounded-lg bg-neutral-50 space-y-1 border border-black/8">
+                              <p>
+                                <strong>Empfänger (Consignee):</strong>{' '}
+                                <span
+                                  className={
+                                    consignee.hasFullAddress ? 'text-black font-semibold' : 'text-amber-700'
+                                  }
+                                >
+                                  {consignee.name}
+                                </span>
+                              </p>
+                              <p>
+                                <strong>Lieferadresse:</strong>{' '}
+                                {consignee.hasFullAddress ? (
+                                  <span>
+                                    {consignee.street}
+                                    {consignee.line2 ? `, ${consignee.line2}` : ''},{' '}
+                                    {consignee.zipCityCountry}
+                                  </span>
+                                ) : (
+                                  <span className="text-amber-700">
+                                    {order.shippingSummary ||
+                                      'Noch nicht hinterlegt — „Stripe synchronisieren“ oder „Bearbeiten“ klicken'}
+                                  </span>
+                                )}
+                              </p>
+                              <p>
+                                <strong>E-Mail:</strong> {consignee.email || '—'} ·{' '}
+                                <strong>Tel/WA:</strong> {consignee.phone || '—'}
+                              </p>
+                              <p>
+                                <strong>Maßchecker:</strong>{' '}
+                                {order.measurementsSummary || 'Standardgröße (14 Tage Rückgabe)'}
+                              </p>
+                              {order.giftNote && (
+                                <p>
+                                  <strong>Notiz / Gutschein:</strong> {order.giftNote}
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="p-3 rounded-lg bg-neutral-50 space-y-2 border border-black/8 flex flex-col justify-between">
+                              <div className="space-y-1">
+                                {order.items.map((item, idx) => (
+                                  <p key={idx}>
+                                    {item.quantity}× <strong>{item.name}</strong> — {item.colorName}{' '}
+                                    · Gr. <strong>{item.sizeLabel}</strong>{' '}
+                                    {item.customMeasure ? `(${item.customMeasure})` : ''}
+                                  </p>
+                                ))}
+                              </div>
+
+                              {/* Quick Fulfillment Switcher */}
+                              <div className="pt-2 border-t border-black/10 flex flex-wrap items-center justify-between gap-2 text-[11.5px]">
+                                <span className="font-semibold text-neutral-600">
+                                  Atelier-Status:
+                                </span>
+                                <div className="inline-flex rounded-lg border border-black/15 overflow-hidden bg-white">
+                                  {(
+                                    [
+                                      { id: 'unfulfilled', label: 'Offen' },
+                                      { id: 'in_production', label: 'Zuschnitt' },
+                                      { id: 'shipped', label: 'Versendet' },
+                                    ] as const
+                                  ).map((st) => (
+                                    <button
+                                      key={st.id}
+                                      type="button"
+                                      disabled={busyAction === `fulfill-${order.id}`}
+                                      onClick={() => handleQuickFulfillment(order.id, st.id)}
+                                      className={`px-2.5 py-1 font-semibold cursor-pointer ${
+                                        fulfill === st.id
+                                          ? 'bg-black text-white'
+                                          : 'text-neutral-700 hover:bg-neutral-100'
+                                      }`}
+                                    >
+                                      {st.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Inline Order Address, Payment & Tracking Editor */}
+                          {isEditingThis && (
+                            <div className="p-4 rounded-xl bg-neutral-50 border-2 border-black space-y-3 text-[12.5px]">
+                              <div className="flex items-center justify-between">
+                                <h5 className="font-bold text-[13.5px]">
+                                  Bestellung {order.id} — Empfängeradresse, Zahlungsstatus &amp;
+                                  Sendungsnummer
+                                </h5>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingOrderId(null);
+                                    setOrderEditDraft(null);
+                                  }}
+                                  className="text-neutral-500 hover:text-black cursor-pointer"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                <label className="block">
+                                  <span className="font-bold">Empfänger Vor- &amp; Nachname</span>
+                                  <input
+                                    value={orderEditDraft.customerName}
+                                    onChange={(e) =>
+                                      setOrderEditDraft({
+                                        ...orderEditDraft,
+                                        customerName: e.target.value,
+                                      })
+                                    }
+                                    placeholder="Max Mustermann"
+                                    className="mt-1 w-full h-9 px-2.5 rounded border border-black/20 bg-white"
+                                  />
+                                </label>
+                                <label className="block">
+                                  <span className="font-bold">Straße &amp; Hausnummer</span>
+                                  <input
+                                    value={orderEditDraft.street}
+                                    onChange={(e) =>
+                                      setOrderEditDraft({
+                                        ...orderEditDraft,
+                                        street: e.target.value,
+                                      })
+                                    }
+                                    placeholder="Musterstraße 12"
+                                    className="mt-1 w-full h-9 px-2.5 rounded border border-black/20 bg-white"
+                                  />
+                                </label>
+                                <label className="block">
+                                  <span className="font-bold">Adresszusatz (optional)</span>
+                                  <input
+                                    value={orderEditDraft.line2}
+                                    onChange={(e) =>
+                                      setOrderEditDraft({
+                                        ...orderEditDraft,
+                                        line2: e.target.value,
+                                      })
+                                    }
+                                    placeholder="Etage / c/o"
+                                    className="mt-1 w-full h-9 px-2.5 rounded border border-black/20 bg-white"
+                                  />
+                                </label>
+                                <label className="block">
+                                  <span className="font-bold">PLZ</span>
+                                  <input
+                                    value={orderEditDraft.zip}
+                                    onChange={(e) =>
+                                      setOrderEditDraft({ ...orderEditDraft, zip: e.target.value })
+                                    }
+                                    placeholder="60311"
+                                    className="mt-1 w-full h-9 px-2.5 rounded border border-black/20 bg-white"
+                                  />
+                                </label>
+                                <label className="block">
+                                  <span className="font-bold">Ort / Stadt</span>
+                                  <input
+                                    value={orderEditDraft.city}
+                                    onChange={(e) =>
+                                      setOrderEditDraft({ ...orderEditDraft, city: e.target.value })
+                                    }
+                                    placeholder="Frankfurt am Main"
+                                    className="mt-1 w-full h-9 px-2.5 rounded border border-black/20 bg-white"
+                                  />
+                                </label>
+                                <label className="block">
+                                  <span className="font-bold">Land (Englisch für Zoll)</span>
+                                  <select
+                                    value={orderEditDraft.country}
+                                    onChange={(e) =>
+                                      setOrderEditDraft({
+                                        ...orderEditDraft,
+                                        country: e.target.value,
+                                      })
+                                    }
+                                    className="mt-1 w-full h-9 px-2.5 rounded border border-black/20 bg-white"
+                                  >
+                                    <option value="Germany">Germany (Deutschland)</option>
+                                    <option value="Austria">Austria (Österreich)</option>
+                                    <option value="Switzerland">Switzerland (Schweiz)</option>
+                                  </select>
+                                </label>
+                                <label className="block">
+                                  <span className="font-bold">Telefon (wichtig für DHL/Zoll!)</span>
+                                  <input
+                                    value={orderEditDraft.whatsappNumber}
+                                    onChange={(e) =>
+                                      setOrderEditDraft({
+                                        ...orderEditDraft,
+                                        whatsappNumber: e.target.value,
+                                      })
+                                    }
+                                    placeholder="+49 176 ..."
+                                    className="mt-1 w-full h-9 px-2.5 rounded border border-black/20 bg-white"
+                                  />
+                                </label>
+                                <label className="block">
+                                  <span className="font-bold">E-Mail</span>
+                                  <input
+                                    value={orderEditDraft.customerEmail}
+                                    onChange={(e) =>
+                                      setOrderEditDraft({
+                                        ...orderEditDraft,
+                                        customerEmail: e.target.value,
+                                      })
+                                    }
+                                    className="mt-1 w-full h-9 px-2.5 rounded border border-black/20 bg-white"
+                                  />
+                                </label>
+                                <label className="block">
+                                  <span className="font-bold">Zahlungsstatus (für Rechnung)</span>
+                                  <select
+                                    value={orderEditDraft.status}
+                                    onChange={(e) =>
+                                      setOrderEditDraft({
+                                        ...orderEditDraft,
+                                        status: e.target.value as OrderRecord['status'],
+                                      })
+                                    }
+                                    className="mt-1 w-full h-9 px-2.5 rounded border border-black/20 bg-white"
+                                  >
+                                    <option value="paid">Bezahlt (Paid)</option>
+                                    <option value="pending_payment">Offen (Pending)</option>
+                                    <option value="cancelled">Storniert</option>
+                                  </select>
+                                </label>
+                                <label className="block">
+                                  <span className="font-bold">Versanddienstleister</span>
+                                  <select
+                                    value={orderEditDraft.carrier}
+                                    onChange={(e) =>
+                                      setOrderEditDraft({
+                                        ...orderEditDraft,
+                                        carrier: e.target.value,
+                                      })
+                                    }
+                                    className="mt-1 w-full h-9 px-2.5 rounded border border-black/20 bg-white"
+                                  >
+                                    <option value="DHL Express">DHL Express (Marokko → DE)</option>
+                                    <option value="DHL Paket DE">
+                                      DHL Paket DE (ab Hub Schöneck)
+                                    </option>
+                                    <option value="UPS Express">UPS Express</option>
+                                    <option value="Chronopost / EMS">Chronopost / EMS</option>
+                                  </select>
+                                </label>
+                                <label className="block sm:col-span-2">
+                                  <span className="font-bold">
+                                    Tracking-Nummer / AWB-Frachtbriefnummer
+                                  </span>
+                                  <input
+                                    value={orderEditDraft.trackingNumber}
+                                    onChange={(e) =>
+                                      setOrderEditDraft({
+                                        ...orderEditDraft,
+                                        trackingNumber: e.target.value,
+                                        fulfillmentStatus: e.target.value.trim()
+                                          ? 'shipped'
+                                          : orderEditDraft.fulfillmentStatus,
+                                      })
+                                    }
+                                    placeholder="z. B. 1234567890 oder 00340434..."
+                                    className="mt-1 w-full h-9 px-2.5 rounded border border-black/20 bg-white font-mono"
+                                  />
+                                </label>
+                              </div>
+
+                              <div className="flex justify-end gap-2 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingOrderId(null);
+                                    setOrderEditDraft(null);
+                                  }}
+                                  className="h-9 px-3.5 rounded-lg border border-black/20 bg-white font-semibold cursor-pointer"
+                                >
+                                  Abbrechen
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={busyAction === `edit-ord-${order.id}`}
+                                  onClick={() => handleSaveOrderEdit(order.id)}
+                                  className="h-9 px-4 rounded-lg bg-[#16A34A] text-white font-bold cursor-pointer"
+                                >
+                                  ✓ Bestelldaten speichern
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Bottom Action Buttons */}
+                          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                            <div className="flex flex-wrap items-center gap-1.5 text-[11.5px]">
+                              <span
+                                className={`px-2 py-0.5 rounded border ${
+                                  order.n8nSent
+                                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                                    : 'bg-neutral-50 border-black/10 text-neutral-600'
+                                }`}
+                              >
+                                n8n: {order.n8nSent ? 'Gesendet' : 'Ausstehend'}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleCopyRecipient(order)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded border border-black/15 bg-white hover:border-black font-medium cursor-pointer"
+                              >
+                                <Copy className="w-3 h-3" />
+                                <span>Adresse kopieren</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openOrderEditor(order)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded border border-black/15 bg-white hover:border-black font-medium cursor-pointer"
+                              >
+                                <Edit3 className="w-3 h-3" />
+                                <span>Adresse &amp; Tracking bearbeiten</span>
+                              </button>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handlePrintInvoice(order)}
+                                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-black text-white text-[12px] font-semibold hover:bg-neutral-800 cursor-pointer"
+                              >
+                                <Printer className="w-3.5 h-3.5" />
+                                <span>Zoll- &amp; Kundenrechnung</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handlePrintShippingLabel(order)}
+                                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border-2 border-black bg-white text-black text-[12px] font-bold hover:bg-neutral-100 cursor-pointer"
+                              >
+                                <Tag className="w-3.5 h-3.5" />
+                                <span>Paket-Zettel &amp; Aufkleber</span>
+                              </button>
+                              {consignee.phone && order.trackingNumber && (
+                                <a
+                                  href={formatWhatsappTrackingHref(consignee.phone, order)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-blue-600 text-white text-[12px] font-semibold"
+                                >
+                                  <Truck className="w-3.5 h-3.5" />
+                                  <span>Tracking per WA</span>
+                                </a>
+                              )}
+                              {consignee.phone && (
+                                <a
+                                  href={formatWhatsappHref(consignee.phone, order)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-[#25D366]/15 text-[#126E35] border border-[#25D366]/35 text-[12px] font-semibold"
+                                >
+                                  <MessageCircle className="w-3.5 h-3.5" />
+                                  <span>WhatsApp</span>
+                                </a>
+                              )}
+                              <button
+                                type="button"
+                                disabled={busyAction === `notify-${order.id}`}
+                                onClick={() => handleNotifyOrder(order.id)}
+                                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-black/20 text-[12px] font-medium hover:border-black cursor-pointer"
+                              >
+                                <Send className="w-3.5 h-3.5" />
+                                <span>n8n</span>
+                              </button>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
+                </div>
+              )}
+
+              {/* ================= TAB 3B: LOGISTICS, CUSTOMS & SARL IN GRÜNDUNG ================= */}
+              {tab === 'logistics' && (
+                <div className="space-y-6">
+                  {/* 1. Practical Playbook for SARL en cours de constitution + Online Postage */}
+                  <div className="p-4 sm:p-5 rounded-xl bg-neutral-50 border-2 border-black space-y-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <span className="inline-block px-2 py-0.5 rounded bg-black text-white text-[10.5px] font-bold uppercase tracking-wider">
+                          SOFORT VERKAUFEN IN DER GRÜNDUNGSPHASE (SARL EN COURS DE CONSTITUTION)
+                        </span>
+                        <h3 className="mt-1.5 text-[17px] font-bold text-black">
+                          So verschickt, frankiert &amp; verzollt ihr jetzt schon 100 % sauber —
+                          bevor die finale ICE-Nummer da ist
+                        </h3>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-[12.5px]">
+                      <div className="p-3.5 rounded-xl bg-white border border-black/15 space-y-1.5">
+                        <p className="font-bold text-black">
+                          Option 1 · Direkt ab Casablanca mit bestehender ICE (echtes DDP)
+                        </p>
+                        <p className="text-neutral-700 leading-relaxed">
+                          Solange die neue SARL <em>en cours de constitution</em> ist, verlangen DHL
+                          Express &amp; UPS für ein <strong>DDP-Rechnungskonto</strong> eine aktive
+                          ICE. Nutzt übergangsweise eure bestehende marokkanische Firma (z. B.{' '}
+                          <span className="font-mono">marrakchi.shop</span>) oder den Gérant: unten
+                          eintragen → <strong>Zollwert 148,74 € (&lt; 150 € = 0 % Zoll)</strong> →
+                          Kunde zahlt 0 € an der Tür.
+                        </p>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl bg-white border border-black/15 space-y-1.5">
+                        <p className="font-bold text-black">
+                          Option 2 · Einzelpaket online buchen &amp; per Karte zahlen (MyDHL+ MA)
+                        </p>
+                        <p className="text-neutral-700 leading-relaxed">
+                          Ohne Firmenkonto bucht ihr jedes Paket einzeln online auf{' '}
+                          <strong>MyDHL+ Marokko</strong> oder <strong>UPS.ma</strong> (Bezahlung per
+                          Kreditkarte, Label sofort ausdrucken). <strong>Wichtig:</strong> Ohne
+                          DDP-Account verzollt der Kurier meist als <strong>DAP</strong> (0 % Zoll
+                          dank Ursprungssatz, aber DHL zieht ~28,26 € Einfuhr-USt beim Empfänger ein
+                          — könnt ihr dem Testkunden per PayPal/Stripe sofort erstatten).
+                        </p>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-300 space-y-1.5">
+                        <p className="font-bold text-emerald-950">
+                          Option 3 · Gründungs-Hack: Sammelbox nach 61137 Schöneck + DHL.de (6,19 €)
+                        </p>
+                        <p className="text-emerald-950/90 leading-relaxed">
+                          Für eure ersten Meta-Ads-Testverkäufe: Schickt 5–10 Jacken gesammelt an
+                          euren Standort <strong>Alte Dorfstraße 3a, 61137 Schöneck</strong> (1×
+                          verzollen) und kauft pro Bestellung online auf <strong>DHL.de</strong>{' '}
+                          eine 2-kg-Paketmarke (<strong>6,19 €</strong> per PayPal / Apple Pay,
+                          sofort drucken &amp; aufkleben). Null Zollkontakt für deutsche Kunden!
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Direct 1-Click Online Franking Portals */}
+                    <div className="pt-2 border-t border-black/10 flex flex-wrap items-center justify-between gap-2.5">
+                      <span className="text-[12px] font-bold text-black">
+                        Online Paketschein kaufen, bezahlen &amp; drucken:
+                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        <a
+                          href="https://mydhl.express.dhl/ma/en/home.html"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-[#FFCC00] text-black text-[12px] font-bold border border-black/20 hover:brightness-95"
+                        >
+                          <span>MyDHL+ Marokko (Online buchen)</span>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                        <a
+                          href="https://www.ups.com/ma/en/Home.page"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-[#351C15] text-white text-[12px] font-bold hover:opacity-90"
+                        >
+                          <span>UPS Marokko Online</span>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                        <a
+                          href="https://www.dhl.de/de/privatkunden/pakete-versenden/online-frankieren.html"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-black text-white text-[12px] font-bold hover:bg-neutral-800"
+                        >
+                          <span>DHL.de Online-Frankierung (ab Schöneck · 6,19 €)</span>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 2. Checklist: How to stick papers on the parcel */}
+                  <div className="p-4 rounded-xl border border-black/15 bg-white text-[12.5px] space-y-2">
+                    <h4 className="text-[14px] font-bold flex items-center gap-2">
+                      <FileCheck2 className="w-4 h-4" />
+                      <span>
+                        Checkliste beim Verpacken in Casablanca (damit kein Paket beim Zoll hängen
+                        bleibt)
+                      </span>
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-2.5 pt-1">
+                      <div className="p-2.5 rounded-lg bg-neutral-50 border border-black/10">
+                        <strong>1. Paketschein aufkleben:</strong> Online bei MyDHL+ / UPS / DHL.de
+                        bezahlen, als PDF drucken und oben flach aufs Paket kleben.
+                      </div>
+                      <div className="p-2.5 rounded-lg bg-neutral-50 border border-black/10">
+                        <strong>2. 3× Handelsrechnung außen:</strong> Im Tab „Bestellungen“ auf{' '}
+                        <em>Zoll- &amp; Kundenrechnung</em> klicken,{' '}
+                        <strong>3× ausdrucken, unterschreiben/stempeln</strong> &amp; außen in eine
+                        Dokumententasche kleben.
+                      </div>
+                      <div className="p-2.5 rounded-lg bg-neutral-50 border border-black/10">
+                        <strong>3. Packzettel nach innen:</strong> Auf{' '}
+                        <em>Paket-Zettel &amp; Aufkleber</em> klicken, unteren Lieferschein
+                        abschneiden und zur Jacke ins Paket legen.
+                      </div>
+                      <div className="p-2.5 rounded-lg bg-neutral-50 border border-black/10">
+                        <strong>4. Tracking senden:</strong> Sendungsnummer in der Bestellung
+                        speichern → 1 Klick auf <em>Tracking per WA</em> informiert den Kunden.
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 3. Editable Exporter, SARL & Customs Settings Form */}
+                  <form
+                    onSubmit={handleSaveExporterSettings}
+                    className="p-4 sm:p-5 rounded-xl border border-black/15 bg-white space-y-4"
+                  >
+                    <div>
+                      <h4 className="text-[15px] font-bold text-black">
+                        Verkäufer / Exporteur-Briefkopf &amp; Zoll-Stammdaten (erscheint oben rechts
+                        auf jeder Rechnung &amp; im Impressum)
+                      </h4>
+                      <p className="text-[12px] text-neutral-600">
+                        Wichtig: Oben rechts auf der Rechnung steht ausschließlich eure
+                        marokkanische Einheit in Casablanca — <strong>niemals</strong> die deutsche
+                        Adresse in Schöneck (diese erscheint nur unten als Retouren-Adresse).
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-[12.5px]">
+                      <label className="block">
+                        <span className="font-bold">Marokkanische Firma / Name der SARL</span>
+                        <input
+                          required
+                          value={exporterDraft.companyName}
+                          onChange={(e) =>
+                            setExporterDraft({ ...exporterDraft, companyName: e.target.value })
+                          }
+                          placeholder="z. B. MRKSHI SARL oder marrakchi.shop"
+                          className="mt-1 w-full h-9 px-3 rounded-lg border border-black/20"
+                        />
+                      </label>
+
+                      <label className="block">
+                        <span className="font-bold">Rechtsform / Gründungszusatz</span>
+                        <input
+                          value={exporterDraft.legalFormNote}
+                          onChange={(e) =>
+                            setExporterDraft({ ...exporterDraft, legalFormNote: e.target.value })
+                          }
+                          placeholder="SARL en cours de constitution"
+                          className="mt-1 w-full h-9 px-3 rounded-lg border border-black/20"
+                        />
+                      </label>
+
+                      <label className="block">
+                        <span className="font-bold">ICE-Nummer (oder Gründungsstatus)</span>
+                        <input
+                          value={exporterDraft.iceNumber}
+                          onChange={(e) =>
+                            setExporterDraft({ ...exporterDraft, iceNumber: e.target.value })
+                          }
+                          placeholder="003... oder En cours d’attribution"
+                          className="mt-1 w-full h-9 px-3 rounded-lg border border-black/20 font-mono"
+                        />
+                      </label>
+
+                      <label className="block">
+                        <span className="font-bold">Straße &amp; Hausnummer (Casablanca)</span>
+                        <input
+                          required
+                          value={exporterDraft.street}
+                          onChange={(e) =>
+                            setExporterDraft({ ...exporterDraft, street: e.target.value })
+                          }
+                          placeholder="Rue ..., Quartier Maarif"
+                          className="mt-1 w-full h-9 px-3 rounded-lg border border-black/20"
+                        />
+                      </label>
+
+                      <label className="block">
+                        <span className="font-bold">PLZ &amp; Stadt (Marokko)</span>
+                        <input
+                          required
+                          value={exporterDraft.cityZip}
+                          onChange={(e) =>
+                            setExporterDraft({ ...exporterDraft, cityZip: e.target.value })
+                          }
+                          placeholder="20100 Casablanca"
+                          className="mt-1 w-full h-9 px-3 rounded-lg border border-black/20"
+                        />
+                      </label>
+
+                      <label className="block">
+                        <span className="font-bold">Ursprungsland (Englisch für Zoll)</span>
+                        <input
+                          required
+                          value={exporterDraft.country}
+                          onChange={(e) =>
+                            setExporterDraft({ ...exporterDraft, country: e.target.value })
+                          }
+                          placeholder="Morocco"
+                          className="mt-1 w-full h-9 px-3 rounded-lg border border-black/20"
+                        />
+                      </label>
+
+                      <label className="block">
+                        <span className="font-bold">E-Mail auf Rechnung</span>
+                        <input
+                          type="email"
+                          required
+                          value={exporterDraft.email}
+                          onChange={(e) =>
+                            setExporterDraft({ ...exporterDraft, email: e.target.value })
+                          }
+                          className="mt-1 w-full h-9 px-3 rounded-lg border border-black/20"
+                        />
+                      </label>
+
+                      <label className="block">
+                        <span className="font-bold">Telefon Marokko (für Kurier-Abholung)</span>
+                        <input
+                          value={exporterDraft.phoneMorocco}
+                          onChange={(e) =>
+                            setExporterDraft({ ...exporterDraft, phoneMorocco: e.target.value })
+                          }
+                          placeholder="+212 6 ..."
+                          className="mt-1 w-full h-9 px-3 rounded-lg border border-black/20"
+                        />
+                      </label>
+
+                      <label className="block">
+                        <span className="font-bold">Kundenservice / WhatsApp DE</span>
+                        <input
+                          value={exporterDraft.phoneSupportDe}
+                          onChange={(e) =>
+                            setExporterDraft({ ...exporterDraft, phoneSupportDe: e.target.value })
+                          }
+                          className="mt-1 w-full h-9 px-3 rounded-lg border border-black/20"
+                        />
+                      </label>
+
+                      <label className="block">
+                        <span className="font-bold">Zolltarifnummer (HS Code Lederbekleidung)</span>
+                        <input
+                          required
+                          value={exporterDraft.defaultHsCode}
+                          onChange={(e) =>
+                            setExporterDraft({ ...exporterDraft, defaultHsCode: e.target.value })
+                          }
+                          className="mt-1 w-full h-9 px-3 rounded-lg border border-black/20 font-mono"
+                        />
+                      </label>
+
+                      <label className="block">
+                        <span className="font-bold">Incoterms auf Handelsrechnung</span>
+                        <select
+                          value={exporterDraft.defaultIncoterms}
+                          onChange={(e) =>
+                            setExporterDraft({
+                              ...exporterDraft,
+                              defaultIncoterms: e.target.value as 'DDP' | 'DAP',
+                            })
+                          }
+                          className="mt-1 w-full h-9 px-3 rounded-lg border border-black/20 bg-white"
+                        >
+                          <option value="DDP">DDP (Delivered Duty Paid — empfohlen)</option>
+                          <option value="DAP">DAP (Delivered at Place — ohne DDP-Konto)</option>
+                        </select>
+                      </label>
+
+                      <label className="block">
+                        <span className="font-bold">Gewicht pro Jacke (kg) &amp; Paket-Absender</span>
+                        <div className="mt-1 flex gap-2">
+                          <input
+                            type="number"
+                            step="0.05"
+                            min="0.3"
+                            max="15"
+                            value={exporterDraft.defaultWeightKg}
+                            onChange={(e) =>
+                              setExporterDraft({
+                                ...exporterDraft,
+                                defaultWeightKg: Number(e.target.value) || 1.35,
+                              })
+                            }
+                            className="w-24 h-9 px-2.5 rounded-lg border border-black/20"
+                          />
+                          <select
+                            value={exporterDraft.dispatchMode}
+                            onChange={(e) =>
+                              setExporterDraft({
+                                ...exporterDraft,
+                                dispatchMode: e.target.value as
+                                  | 'casablanca_direct'
+                                  | 'schoeneck_hub',
+                              })
+                            }
+                            className="flex-1 h-9 px-2 rounded-lg border border-black/20 bg-white text-[11.5px]"
+                          >
+                            <option value="casablanca_direct">Direkt ab Casablanca</option>
+                            <option value="schoeneck_hub">Ab Hub 61137 Schöneck</option>
+                          </select>
+                        </div>
+                      </label>
+                    </div>
+
+                    <div className="pt-3 border-t border-black/10 grid grid-cols-1 sm:grid-cols-3 gap-3 text-[12.5px]">
+                      <label className="block">
+                        <span className="font-bold">Retouren-Empfänger Deutschland (nur Fußzeile)</span>
+                        <input
+                          value={exporterDraft.returnNameDe}
+                          onChange={(e) =>
+                            setExporterDraft({ ...exporterDraft, returnNameDe: e.target.value })
+                          }
+                          className="mt-1 w-full h-9 px-3 rounded-lg border border-black/20"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="font-bold">Retouren-Straße DE</span>
+                        <input
+                          value={exporterDraft.returnStreetDe}
+                          onChange={(e) =>
+                            setExporterDraft({ ...exporterDraft, returnStreetDe: e.target.value })
+                          }
+                          className="mt-1 w-full h-9 px-3 rounded-lg border border-black/20"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="font-bold">Retouren-PLZ &amp; Ort DE</span>
+                        <input
+                          value={exporterDraft.returnCityZipDe}
+                          onChange={(e) =>
+                            setExporterDraft({ ...exporterDraft, returnCityZipDe: e.target.value })
+                          }
+                          className="mt-1 w-full h-9 px-3 rounded-lg border border-black/20"
+                        />
+                      </label>
+                    </div>
+
+                    <div className="flex justify-end pt-1">
+                      <button
+                        type="submit"
+                        disabled={busyAction === 'save-exporter'}
+                        className="h-10 px-6 rounded-lg bg-[#16A34A] hover:bg-[#15803D] text-white text-[13.5px] font-bold cursor-pointer"
+                      >
+                        {busyAction === 'save-exporter'
+                          ? 'Speichert…'
+                          : '✓ Exporteur-, SARL- & Zoll-Stammdaten speichern'}
+                      </button>
+                    </div>
+                  </form>
                 </div>
               )}
 
