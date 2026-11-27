@@ -1689,16 +1689,24 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
                                           if (u) uploaded.push(u);
                                         }
                                         if (uploaded.length > 0) {
-                                          setDraft((prev) =>
-                                            prev
-                                              ? {
-                                                  ...prev,
-                                                  gallery: [...uploaded, ...prev.gallery],
-                                                }
-                                              : prev
-                                          );
+                                          const nextGallery = [...uploaded, ...draft.gallery];
+                                          const nextColors =
+                                            draft.colors.length > 0
+                                              ? [
+                                                  { ...draft.colors[0], image: nextGallery[0] },
+                                                  ...draft.colors.slice(1),
+                                                ]
+                                              : draft.colors;
+                                          const nextDraft = {
+                                            ...draft,
+                                            gallery: nextGallery,
+                                            colors: nextColors,
+                                          };
+                                          setDraft(nextDraft);
+                                          // Immediately persist uploaded images live to storefront!
+                                          await handleUpdateProduct(prod.id, nextDraft);
                                           setToastMsg(
-                                            `${uploaded.length} Bild(er) hochgeladen — unten auf „Änderungen speichern“ klicken!`
+                                            `${uploaded.length} Bild(er) hochgeladen & sofort live im Shop aktiviert!`
                                           );
                                         }
                                         e.target.value = '';
@@ -1717,11 +1725,25 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
                                   />
                                   <button
                                     type="button"
-                                    onClick={() => {
+                                    onClick={async () => {
                                       const u = newImageUrlInput.trim();
                                       if (!u) return;
-                                      setDraft({ ...draft, gallery: [u, ...draft.gallery] });
+                                      const nextGallery = [u, ...draft.gallery];
+                                      const nextColors =
+                                        draft.colors.length > 0
+                                          ? [
+                                              { ...draft.colors[0], image: nextGallery[0] },
+                                              ...draft.colors.slice(1),
+                                            ]
+                                          : draft.colors;
+                                      const nextDraft = {
+                                        ...draft,
+                                        gallery: nextGallery,
+                                        colors: nextColors,
+                                      };
+                                      setDraft(nextDraft);
                                       setNewImageUrlInput('');
+                                      await handleUpdateProduct(prod.id, nextDraft);
                                     }}
                                     className="h-9 px-3.5 rounded-lg border border-black text-[12px] font-bold hover:bg-black hover:text-white cursor-pointer"
                                   >
@@ -1754,13 +1776,26 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
                                           type="button"
                                           disabled={gIdx === 0}
                                           title="Nach vorne"
-                                          onClick={() => {
+                                          onClick={async () => {
                                             const next = [...draft.gallery];
                                             [next[gIdx - 1], next[gIdx]] = [
                                               next[gIdx],
                                               next[gIdx - 1],
                                             ];
-                                            setDraft({ ...draft, gallery: next });
+                                            const nextColors =
+                                              draft.colors.length > 0
+                                                ? [
+                                                    { ...draft.colors[0], image: next[0] },
+                                                    ...draft.colors.slice(1),
+                                                  ]
+                                                : draft.colors;
+                                            const nextDraft = {
+                                              ...draft,
+                                              gallery: next,
+                                              colors: nextColors,
+                                            };
+                                            setDraft(nextDraft);
+                                            await handleUpdateProduct(prod.id, nextDraft);
                                           }}
                                           className="h-6 flex-1 rounded bg-white border border-black/15 flex items-center justify-center hover:border-black disabled:opacity-30 cursor-pointer"
                                         >
@@ -1771,13 +1806,26 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
                                           type="button"
                                           disabled={gIdx === draft.gallery.length - 1}
                                           title="Nach hinten"
-                                          onClick={() => {
+                                          onClick={async () => {
                                             const next = [...draft.gallery];
                                             [next[gIdx + 1], next[gIdx]] = [
                                               next[gIdx],
                                               next[gIdx + 1],
                                             ];
-                                            setDraft({ ...draft, gallery: next });
+                                            const nextColors =
+                                              draft.colors.length > 0
+                                                ? [
+                                                    { ...draft.colors[0], image: next[0] },
+                                                    ...draft.colors.slice(1),
+                                                  ]
+                                                : draft.colors;
+                                            const nextDraft = {
+                                              ...draft,
+                                              gallery: next,
+                                              colors: nextColors,
+                                            };
+                                            setDraft(nextDraft);
+                                            await handleUpdateProduct(prod.id, nextDraft);
                                           }}
                                           className="h-6 flex-1 rounded bg-white border border-black/15 flex items-center justify-center hover:border-black disabled:opacity-30 cursor-pointer"
                                         >
@@ -1788,11 +1836,24 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
                                           <button
                                             type="button"
                                             title="Als Hauptbild #1 setzen"
-                                            onClick={() => {
+                                            onClick={async () => {
                                               const next = [...draft.gallery];
                                               const [picked] = next.splice(gIdx, 1);
                                               next.unshift(picked);
-                                              setDraft({ ...draft, gallery: next });
+                                              const nextColors =
+                                                draft.colors.length > 0
+                                                  ? [
+                                                      { ...draft.colors[0], image: next[0] },
+                                                      ...draft.colors.slice(1),
+                                                    ]
+                                                  : draft.colors;
+                                              const nextDraft = {
+                                                ...draft,
+                                                gallery: next,
+                                                colors: nextColors,
+                                              };
+                                              setDraft(nextDraft);
+                                              await handleUpdateProduct(prod.id, nextDraft);
                                             }}
                                             className="h-6 px-1.5 rounded bg-white border border-black/15 flex items-center justify-center hover:border-black cursor-pointer"
                                           >
@@ -1804,11 +1865,22 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
                                           type="button"
                                           disabled={draft.gallery.length <= 1}
                                           title="Bild löschen"
-                                          onClick={() => {
+                                          onClick={async () => {
                                             const next = draft.gallery.filter(
                                               (_, idx) => idx !== gIdx
                                             );
-                                            setDraft({ ...draft, gallery: next });
+                                            const nextColors = draft.colors.map((c, ci) =>
+                                              ci === 0 || !next.includes(c.image)
+                                                ? { ...c, image: next[0] }
+                                                : c
+                                            );
+                                            const nextDraft = {
+                                              ...draft,
+                                              gallery: next,
+                                              colors: nextColors,
+                                            };
+                                            setDraft(nextDraft);
+                                            await handleUpdateProduct(prod.id, nextDraft);
                                           }}
                                           className="h-6 px-1.5 rounded bg-white border border-red-200 text-red-600 flex items-center justify-center hover:bg-red-50 disabled:opacity-30 cursor-pointer"
                                         >
@@ -1881,10 +1953,21 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
                                       />
                                       <select
                                         value={c.image}
-                                        onChange={(e) => {
-                                          const next = [...draft.colors];
-                                          next[cIdx] = { ...c, image: e.target.value };
-                                          setDraft({ ...draft, colors: next });
+                                        onChange={async (e) => {
+                                          const chosen = e.target.value;
+                                          const nextColors = [...draft.colors];
+                                          nextColors[cIdx] = { ...c, image: chosen };
+                                          const nextGallery =
+                                            cIdx === 0
+                                              ? [chosen, ...draft.gallery.filter((x) => x !== chosen)]
+                                              : draft.gallery;
+                                          const nextDraft = {
+                                            ...draft,
+                                            colors: nextColors,
+                                            gallery: nextGallery,
+                                          };
+                                          setDraft(nextDraft);
+                                          await handleUpdateProduct(prod.id, nextDraft);
                                         }}
                                         className="flex-1 min-w-[140px] h-8 px-2 rounded border border-black/20 bg-white text-[11.5px]"
                                       >
@@ -1911,12 +1994,19 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
                                             if (u) {
                                               const nextColors = [...draft.colors];
                                               nextColors[cIdx] = { ...c, image: u };
-                                              setDraft({
+                                              const nextGallery =
+                                                cIdx === 0
+                                                  ? [u, ...draft.gallery]
+                                                  : [...draft.gallery, u];
+                                              const nextDraft = {
                                                 ...draft,
                                                 colors: nextColors,
-                                                gallery: [u, ...draft.gallery],
-                                              });
+                                                gallery: nextGallery,
+                                              };
+                                              setDraft(nextDraft);
+                                              await handleUpdateProduct(prod.id, nextDraft);
                                             }
+                                            e.target.value = '';
                                           }}
                                         />
                                       </label>

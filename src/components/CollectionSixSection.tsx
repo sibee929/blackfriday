@@ -40,7 +40,14 @@ export const CollectionSixSection: React.FC<CollectionSixSectionProps> = ({
 
   const sectionRef = useRef<HTMLElement | null>(null);
 
-  // Open product gallery modal automatically when visited via Lovable sidelink (/products/:handle)
+  // Sync open detailProduct whenever catalog products update from Admin Studio
+  useEffect(() => {
+    if (!detailProduct) return;
+    const updated = products.find((p) => p.id === detailProduct.id);
+    if (updated && updated !== detailProduct) {
+      setDetailProduct(updated);
+    }
+  }, [products, detailProduct]);
   useEffect(() => {
     if (!externalOpenProductId) return;
     const match = products.find((p) => p.id === externalOpenProductId);
@@ -193,7 +200,11 @@ export const CollectionSixSection: React.FC<CollectionSixSectionProps> = ({
           {visibleProducts.map((jacket, cardIdx) => {
             const activeColor = getActiveColor(jacket);
             const activeSize = getActiveSize(jacket);
-            const optimizedSrc = optimizeProductImage(activeColor.image, 640);
+            const hasExplicitColorChoice = Boolean(selectedColors[jacket.id]);
+            const primaryImage = hasExplicitColorChoice
+              ? activeColor.image
+              : jacket.gallery[0] || activeColor.image;
+            const optimizedSrc = optimizeProductImage(primaryImage, 640);
             const imgFailed = failedImages[optimizedSrc];
             const openDetails = () => {
               setDetailProduct(jacket);
@@ -460,8 +471,15 @@ export const CollectionSixSection: React.FC<CollectionSixSectionProps> = ({
             <div className="mt-5 grid grid-cols-1 md:grid-cols-12 gap-6">
               <div className="md:col-span-6">
                 {(() => {
+                  const hasColorPick = Boolean(selectedColors[detailProduct.id]);
+                  const activeColImg = getActiveColor(detailProduct).image;
                   const imgs = Array.from(
-                    new Set([getActiveColor(detailProduct).image, ...detailProduct.gallery].filter(Boolean))
+                    new Set(
+                      (hasColorPick
+                        ? [activeColImg, ...detailProduct.gallery]
+                        : [...detailProduct.gallery, activeColImg]
+                      ).filter(Boolean)
+                    )
                   );
                   const safeIdx = Math.min(detailImageIdx, Math.max(0, imgs.length - 1));
                   const shown = optimizeProductImage(imgs[safeIdx] ?? imgs[0], 1000);

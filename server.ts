@@ -947,8 +947,9 @@ async function startServer() {
     });
   });
 
-  // Authoritative 8-Product Catalog Endpoint (applies optional Admin 1-EUR Live Test price)
+  // Authoritative Catalog Endpoint (never cached by browser/CDN so admin edits appear instantly)
   app.get('/api/catalog', (_req: Request, res: Response) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
     const publicProducts = store.products.map((prod) =>
       store.oneEuroTestProductId === prod.id ? { ...prod, priceEur: 1 } : prod
     );
@@ -2186,6 +2187,8 @@ async function startServer() {
     if (typeof body.active === 'boolean') {
       prod.active = body.active;
     }
+    const prevLeadImage = prod.gallery[0] ?? prod.colors[0]?.image ?? '';
+
     if (Array.isArray(body.gallery)) {
       const cleanGallery = body.gallery
         .filter((u): u is string => typeof u === 'string' && u.trim().length > 0)
@@ -2222,8 +2225,29 @@ async function startServer() {
       }
     }
 
+    // Keep primary color card image synced when gallery #1 (Hauptbild) changed
+    const newLeadImage = prod.gallery[0] ?? '';
+    if (
+      newLeadImage &&
+      prod.colors.length > 0 &&
+      (prod.colors.length === 1 || prod.colors[0].image === prevLeadImage)
+    ) {
+      prod.colors[0] = { ...prod.colors[0], image: newLeadImage };
+    }
+
+    // Remove deleted gallery images from colors if any color pointed to a removed image
+    if (Array.isArray(body.gallery) && prod.gallery.length > 0) {
+      const galSet = new Set(prod.gallery);
+      prod.colors = prod.colors.map((c) =>
+        galSet.has(c.image) ? c : { ...c, image: prod.gallery[0] }
+      );
+    }
+
     persistStoreState();
-    res.json({ product: prod, products: store.products });
+    const publicProducts = store.products.map((p) =>
+      store.oneEuroTestProductId === p.id ? { ...p, priceEur: 1 } : p
+    );
+    res.json({ product: prod, products: publicProducts });
   });
 
   app.post('/api/admin/products', requireAdminAuth, (req: Request, res: Response) => {

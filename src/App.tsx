@@ -59,10 +59,10 @@ export default function App() {
     trackStoreEvent('page_view');
   }, []);
 
-  // Load authoritative Reverse-Shopify catalog from server
+  // Load authoritative Reverse-Shopify catalog from server (no-store so admin edits appear immediately)
   useEffect(() => {
     let active = true;
-    fetch('/api/catalog')
+    fetch('/api/catalog', { cache: 'no-store' })
       .then((res) => (res.ok ? res.json() : null))
       .then((data: { products?: JacketProduct[] } | null) => {
         if (active && Array.isArray(data?.products) && data.products.length > 0) {
