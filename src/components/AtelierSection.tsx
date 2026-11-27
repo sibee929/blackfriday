@@ -28,9 +28,9 @@ const DEFAULT_EXPORTER_INFO: ExporterPublicInfo = {
   country: 'Morocco',
   iceNumber: 'En cours d’attribution',
   email: 'service@mrkshi.com',
-  phoneMorocco: '',
-  phoneSupportDe: '+49 176 43488260',
-  returnNameDe: 'MRKSHI',
+  phoneMorocco: '+212 753 310 471',
+  phoneSupportDe: '',
+  returnNameDe: 'MRKSHI Retouren-Programm',
   returnStreetDe: 'Alte Dorfstraße 3a',
   returnCityZipDe: '61137 Schöneck',
   defaultHsCode: '42031000',
@@ -95,15 +95,14 @@ export const AtelierSectionAndFooter: React.FC<AtelierFooterProps> = ({
 
           <div>
             <p className="text-[11.5px] font-bold tracking-[0.18em] uppercase text-black/60">
-              03. MASSCHECKER & 14 TAGE RÜCKGABE
+              03. MASSCHECKER & 14-TAGE RETOUREN-PROGRAMM
             </p>
             <h3 className="mt-2 font-masculine text-[24px] font-bold text-black">
               PERFEKTE PASSFORM S–3XL OHNE RISIKO.
             </h3>
             <p className="mt-2.5 text-[14.5px] font-medium leading-[1.6] text-black/75">
               Jede Größe S–3XL plus kostenloses Direkt-Maß (vor & nach Bezahlung) zum selben Preis
-              von 177,00 €. Volles 14-tägiges Rückgaberecht über unseren deutschen Standort in
-              61137 Schöneck.
+              von 177,00 €. Bei Standardgrößen gilt unser unkompliziertes 14-Tage-Retouren-Programm.
             </p>
           </div>
         </div>
@@ -115,8 +114,8 @@ export const AtelierSectionAndFooter: React.FC<AtelierFooterProps> = ({
           <div>
             <span className="font-brand text-[20px] text-black">MRKSHI</span>
             <span className="ml-3 font-medium text-black/75">
-              © {new Date().getFullYear()} www.mrkshi.com · Casablanca × Deutschland (Retouren:{' '}
-              {exp.returnCityZipDe})
+              © {new Date().getFullYear()} www.mrkshi.com · Lederatelier Casablanca & Marrakesch,
+              Marokko
             </span>
           </div>
 
@@ -180,10 +179,10 @@ export const AtelierSectionAndFooter: React.FC<AtelierFooterProps> = ({
           >
             <div className="flex items-center justify-between pb-3 border-b border-black/15">
               <h3 className="font-masculine text-[22px] font-bold text-black">
-                {activeLegalDialog === 'versand' && 'VERSAND, ZOLL & 14 TAGE RÜCKGABE'}
-                {activeLegalDialog === 'impressum' && 'IMPRESSUM & KONTAKT (WWW.MRKSHI.COM)'}
-                {activeLegalDialog === 'datenschutz' && 'DATENSCHUTZERKLÄRUNG (DSGVO / TTDSG)'}
-                {activeLegalDialog === 'widerruf' && 'WIDERRUFSBELEHRUNG (14 TAGE DEUTSCHLAND)'}
+                {activeLegalDialog === 'versand' && 'VERSAND, ZOLL & 14-TAGE RETOUREN-PROGRAMM'}
+                {activeLegalDialog === 'impressum' && 'IMPRESSUM & ATELIER-KONTAKT (MAROKKO)'}
+                {activeLegalDialog === 'datenschutz' && 'DATENSCHUTZERKLÄRUNG (DSGVO / TDDDG)'}
+                {activeLegalDialog === 'widerruf' && 'WIDERRUFSBELEHRUNG & RETOUREN-PROGRAMM'}
                 {activeLegalDialog === 'agb' && 'ALLGEMEINE GESCHÄFTSBEDINGUNGEN (AGB)'}
               </h3>
               <button
@@ -199,10 +198,9 @@ export const AtelierSectionAndFooter: React.FC<AtelierFooterProps> = ({
               {activeLegalDialog === 'versand' && (
                 <>
                   <p>
-                    Alle Bestellungen (Herren-Lederjacken ab 177,00 € inkl. Abgaben) werden
+                    Alle Bestellungen werden direkt aus unserem marokkanischen Lederatelier
                     versichert per <strong>DHL Express / Kurier</strong> kostenlos (0,00 €
-                    Versandkosten) bis vor deine Haustür nach Deutschland, Österreich und in die
-                    Schweiz geliefert (Lieferzeit: 7–14 Werktage).
+                    Versandkosten) bis vor deine Haustür geliefert (Lieferzeit: 7–14 Werktage).
                   </p>
                   <p>
                     <strong>Zoll & Präferenzursprung Marokko:</strong> Unsere Jacken werden in
@@ -211,10 +209,10 @@ export const AtelierSectionAndFooter: React.FC<AtelierFooterProps> = ({
                     Modus <strong>Incoterms: {exp.defaultIncoterms}</strong>.
                   </p>
                   <p>
-                    <strong>Deutsche Rücksendeadresse (14 Tage bei Standardgrößen):</strong>{' '}
-                    Rücksendungen innerhalb Deutschlands erfolgen unkompliziert an unsere deutsche
-                    Retouren-Annahmestelle: <strong>{deReturnLine}</strong> (kein teurer
-                    Rückversand nach Marokko nötig).
+                    <strong>14-Tage-Retouren-Programm (Standardgrößen):</strong> Damit Kunden kein
+                    Auslandsporto nach Marokko zahlen müssen, können ungetragene Standardgrößen
+                    innerhalb von 14 Tagen ab Erhalt an unsere Paket-Retourenstelle gesendet werden:{' '}
+                    <strong>{deReturnLine}</strong> <em>(ausschließlich Retouren-Paketannahme)</em>.
                   </p>
                 </>
               )}
@@ -222,7 +220,7 @@ export const AtelierSectionAndFooter: React.FC<AtelierFooterProps> = ({
               {activeLegalDialog === 'impressum' && (
                 <>
                   <p>
-                    <strong>Verkäufer & Betreiber (Exporter):</strong>
+                    <strong>Anbieter, Verkäufer & Betreiber:</strong>
                     <br />
                     {sellerTitle}
                     <br />
@@ -235,15 +233,16 @@ export const AtelierSectionAndFooter: React.FC<AtelierFooterProps> = ({
                     ) : null}
                   </p>
                   <p>
-                    <strong>Kontakt & Kundenservice (Deutsch / Englisch / Französisch):</strong>
+                    <strong>Atelier-Kontakt (Deutsch / Französisch / Englisch):</strong>
                     <br />
-                    E-Mail: <span className="font-mono">{exp.email}</span> · WhatsApp & Support:{' '}
-                    <span className="font-mono">{exp.phoneSupportDe}</span>
-                  </p>
-                  <p>
-                    <strong>Rücksendeadresse & Logistik-Annahmestelle Deutschland:</strong>
-                    <br />
-                    {deReturnLine}, Deutschland <em>(ausschließlich Retouren-Empfangsstelle)</em>
+                    E-Mail: <span className="font-mono">{exp.email}</span>
+                    {exp.phoneMorocco ? (
+                      <>
+                        {' '}
+                        · WhatsApp Atelier Marokko:{' '}
+                        <span className="font-mono">{exp.phoneMorocco}</span>
+                      </>
+                    ) : null}
                   </p>
                   <p>Domain: https://www.mrkshi.com</p>
                   <p>
@@ -261,9 +260,10 @@ export const AtelierSectionAndFooter: React.FC<AtelierFooterProps> = ({
                     Vertrag bei Standardgrößen (S–3XL) zu widerrufen.
                   </p>
                   <p>
-                    Um Ihr Widerrufsrecht auszuüben, informieren Sie uns bitte per E-Mail an{' '}
-                    <strong>{exp.email}</strong> oder WhatsApp ({exp.phoneSupportDe}) und senden die
-                    ungetragene Jacke innerhalb Deutschlands an unsere Retouren-Empfangsstelle:{' '}
+                    Um Ihr Widerrufsrecht im Rahmen unseres <strong>Retouren-Programms</strong>{' '}
+                    auszuüben, informieren Sie uns bitte per E-Mail an <strong>{exp.email}</strong>
+                    {exp.phoneMorocco ? ` oder WhatsApp (${exp.phoneMorocco})` : ''} und senden die
+                    ungetragene Jacke an die Rücksendeadresse unseres Retouren-Programms:{' '}
                     <strong>{deReturnLine}</strong>.
                   </p>
                   <p>
@@ -277,10 +277,9 @@ export const AtelierSectionAndFooter: React.FC<AtelierFooterProps> = ({
               {activeLegalDialog === 'agb' && (
                 <>
                   <p>
-                    <strong>1. Vertragspartner & Geltungsbereich:</strong> Vertragspartner für alle
-                    Bestellungen über www.mrkshi.com ist <strong>{sellerTitle}</strong> ({exp.street}
-                    , {exp.cityZip}, {exp.country}). Für Rücksendungen innerhalb Deutschlands steht
-                    unsere Retouren-Annahmestelle ({deReturnLine}) bereit.
+                    <strong>1. Vertragspartner & Geltungsbereich:</strong> Ausschließlicher
+                    Vertragspartner und Verkäufer für alle Bestellungen über www.mrkshi.com ist{' '}
+                    <strong>{sellerTitle}</strong> ({exp.street}, {exp.cityZip}, {exp.country}).
                   </p>
                   <p>
                     <strong>2. Preise, Zoll & Zahlung:</strong> Alle ausgewiesenen Endpreise
@@ -289,11 +288,11 @@ export const AtelierSectionAndFooter: React.FC<AtelierFooterProps> = ({
                     PayPal, Visa, Mastercard).
                   </p>
                   <p>
-                    <strong>3. Naturprodukt Echtleder & Maßanfertigung:</strong> Jede Jacke besteht
-                    aus 100 % echtem marokkanischem Naturleder (Lamm-Nappa, Rind- oder Wildleder).
-                    Bei Standardgrößen (S–3XL) gilt ein 14-tägiges Widerrufsrecht ab Erhalt der
-                    Ware; individuelle Maßanfertigungen sind gem. § 312g Abs. 2 Nr. 1 BGB vom
-                    Widerruf ausgeschlossen.
+                    <strong>3. Naturprodukt Echtleder & Retouren-Programm:</strong> Jede Jacke
+                    besteht aus 100 % echtem marokkanischem Naturleder (Lamm-Nappa, Rind- oder
+                    Wildleder). Bei Standardgrößen (S–3XL) gilt unser 14-tägiges Retouren-Programm
+                    ab Erhalt der Ware; individuelle Maßanfertigungen sind gem. § 312g Abs. 2 Nr. 1
+                    BGB vom Widerruf ausgeschlossen.
                   </p>
                 </>
               )}
@@ -302,8 +301,8 @@ export const AtelierSectionAndFooter: React.FC<AtelierFooterProps> = ({
                 <>
                   <p>
                     <strong>1. Verantwortlicher (Art. 4 Nr. 7 DSGVO):</strong> {sellerTitle},{' '}
-                    {exp.street}, {exp.cityZip}, {exp.country}, E-Mail: {exp.email}, Kundenservice &
-                    Ansprechpartner DE: {deReturnLine}, Tel: {exp.phoneSupportDe}.
+                    {exp.street}, {exp.cityZip}, {exp.country}, E-Mail: {exp.email}
+                    {exp.phoneMorocco ? `, Tel/WhatsApp: ${exp.phoneMorocco}` : ''}.
                   </p>
                   <p>
                     <strong>2. Zahlungsabwicklung (Stripe, Klarna, Apple Pay, PayPal):</strong>{' '}
@@ -324,11 +323,11 @@ export const AtelierSectionAndFooter: React.FC<AtelierFooterProps> = ({
                     (Art. 6 Abs. 1 lit. b DSGVO).
                   </p>
                   <p>
-                    <strong>5. Meta Pixel & Newsletter:</strong>{' '}
+                    <strong>5. Meta Pixel & Raritäten-Newsletter:</strong>{' '}
                     Marketing-Tracking (Meta Pixel, Conversions API, GA4) wird erst nach Ihrer
                     ausdrücklichen Einwilligung über den Cookie-Banner (Art. 6 Abs. 1 lit. a DSGVO,
                     § 25 TDDDG) geladen. Newsletter-Daten dienen nur dem Versand von Gutscheinen
-                    (TREUE10) und neuen Leder-Drops und können jederzeit widerrufen werden.
+                    (TREUE10) und neuen Leder-Raritäten und können jederzeit widerrufen werden.
                   </p>
                 </>
               )}

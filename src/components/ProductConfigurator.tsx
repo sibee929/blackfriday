@@ -497,12 +497,12 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
             <div className="flex flex-wrap items-center justify-between gap-2 text-[12px] font-semibold text-black/80">
               <span>✓ Sondermaß & Maßabgleich direkt nach Bezahlung möglich</span>
               <a
-                href="https://wa.me/4917643488260?text=Hallo%20MRKSHI%20Team,%20ich%20habe%20eine%20Frage%20zu%20Gr%C3%B6%C3%9Fe%20%26%20Farbe."
+                href="https://wa.me/212753310471?text=Hallo%20MRKSHI%20Atelier,%20ich%20habe%20eine%20Frage%20zu%20Gr%C3%B6%C3%9Fe%20%26%20Farbe."
                 target="_blank"
                 rel="noopener noreferrer"
                 className="font-bold uppercase tracking-[0.05em] text-black underline underline-offset-4 hover:opacity-70"
               >
-                WhatsApp Direkt-Kontakt
+                WhatsApp Atelier-Kontakt
               </a>
             </div>
           </div>

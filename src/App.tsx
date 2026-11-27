@@ -506,6 +506,13 @@ export default function App() {
             >
               Alle 9 Modelle
             </button>
+            <button
+              type="button"
+              onClick={() => scrollToSection('newsletter')}
+              className="hover:text-black cursor-pointer"
+            >
+              Luxus & Raritäten
+            </button>
           </nav>
 
           <button

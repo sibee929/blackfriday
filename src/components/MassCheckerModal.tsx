@@ -300,13 +300,13 @@ export const MassCheckerModal: React.FC<MassCheckerModalProps> = ({
           </div>
 
           <a
-            href={`https://wa.me/4917643488260?text=${waMessage}`}
+            href={`https://wa.me/212753310471?text=${waMessage}`}
             target="_blank"
             rel="noopener noreferrer"
             className="w-full h-10 px-4 rounded-lg bg-[#25D366]/12 text-[#126E35] border border-[#25D366]/35 text-[13px] font-medium hover:bg-[#25D366]/20 flex items-center justify-center gap-2"
           >
             <MessageCircle className="w-4 h-4" />
-            <span>Unsicher? Maße direkt per WhatsApp prüfen (+49 176 43488260)</span>
+            <span>Unsicher? Maße direkt per WhatsApp ans Atelier Marokko senden</span>
           </a>
         </div>
       </div>

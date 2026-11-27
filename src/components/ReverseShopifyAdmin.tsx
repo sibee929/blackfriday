@@ -58,9 +58,9 @@ const DEFAULT_EXPORTER_SETTINGS: ExporterSettings = {
   country: 'Morocco',
   iceNumber: 'En cours d’attribution',
   email: 'service@mrkshi.com',
-  phoneMorocco: '',
-  phoneSupportDe: '+49 176 43488260',
-  returnNameDe: 'MRKSHI',
+  phoneMorocco: '+212 753 310 471',
+  phoneSupportDe: '',
+  returnNameDe: 'MRKSHI Retouren-Programm',
   returnStreetDe: 'Alte Dorfstraße 3a',
   returnCityZipDe: '61137 Schöneck',
   defaultHsCode: '42031000',
@@ -988,7 +988,7 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
       <div class="top">
         <div>
           <div class="brand">MRKSHI</div>
-          <div class="sub" style="margin-top:4px;font-weight:700;color:#111">Lederatelier · Casablanca × Deutschland</div>
+          <div class="sub" style="margin-top:4px;font-weight:700;color:#111">Lederatelier · Casablanca &amp; Marrakesch, Marokko</div>
         </div>
         <div class="r" style="font-size:11.8px;max-width:340px">
           <strong>Verkäufer / Exporter:</strong><br/>
@@ -1082,7 +1082,7 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
       </div>
 
       <div class="foot">
-        Vielen Dank für deinen Einkauf bei MRKSHI. <strong>Widerrufsrecht:</strong> 14 Tage ab Erhalt der Ware bei Standardgrößen (kein Widerrufsrecht bei individuellen Maßanfertigungen gem. § 312g Abs. 2 Nr. 1 BGB). <strong>Rücksendeadresse Deutschland:</strong> ${esc(deReturnFull)}.
+        Vielen Dank für deinen Einkauf bei MRKSHI. <strong>Widerrufsrecht:</strong> 14 Tage ab Erhalt der Ware bei Standardgrößen (kein Widerrufsrecht bei individuellen Maßanfertigungen gem. § 312g Abs. 2 Nr. 1 BGB). <strong>14-Tage-Retouren-Programm (Rücksendeadresse):</strong> ${esc(deReturnFull)}.
       </div>
       <script>setTimeout(function(){window.print()},400)</script>
       </body></html>`;
@@ -1199,7 +1199,7 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
         }
         <div style="font-size:11.5px;border-top:1px solid #DDD;padding-top:8px;color:#333">
           <strong>Pack-Checkliste vor Versand:</strong> ☐ Leder &amp; Reißverschlüsse geprüft &nbsp; ☐ Größe/Maße kontrolliert &nbsp; ☐ 3× unterschriebene Handelsrechnung außen angebracht<br/><br/>
-          <strong>Für den Kunden — Rückgabe &amp; Support:</strong> Fragen zur Passform? Schreib uns jederzeit per WhatsApp an <strong>${esc(exp.phoneSupportDe)}</strong> oder <strong>${esc(exp.email)}</strong>. Rücksendeadresse Deutschland (14 Tage bei Standardgrößen): <strong>${esc(exp.returnNameDe)}, ${esc(exp.returnStreetDe)}, ${esc(exp.returnCityZipDe)}</strong>.
+          <strong>Für den Kunden — Kontakt &amp; Retouren-Programm:</strong> Fragen zur Passform? Schreib unserem Atelier jederzeit an <strong>${esc(exp.email)}</strong>${exp.phoneMorocco ? ` oder per WhatsApp an <strong>${esc(exp.phoneMorocco)}</strong>` : ''}. <strong>14-Tage-Retouren-Programm (Rücksendeadresse bei Standardgrößen):</strong> ${esc(exp.returnNameDe)}, ${esc(exp.returnStreetDe)}, ${esc(exp.returnCityZipDe)}.
         </div>
       </div>
       <script>setTimeout(function(){window.print()},350)</script>

@@ -3,7 +3,6 @@ import {
   CheckCircle2,
   Mail,
   MessageCircle,
-  Phone,
   Ruler,
   ShieldCheck,
   X,
@@ -39,7 +38,7 @@ export const PostPaymentModal: React.FC<PostPaymentModalProps> = ({
   if (!confirmation) return null;
 
   const orderLabel = confirmation.orderNumber ?? confirmation.sessionId;
-  const whatsappUrl = `https://wa.me/4917643488260?text=${encodeURIComponent(
+  const whatsappUrl = `https://wa.me/212753310471?text=${encodeURIComponent(
     `Hallo MRKSHI Atelier, ich habe gerade bestellt (${orderLabel}) und möchte mein Sondermaß / meine Lieferung direkt abstimmen.`
   )}`;
 
@@ -262,12 +261,12 @@ export const PostPaymentModal: React.FC<PostPaymentModalProps> = ({
           <div className="border border-black/20 p-4 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-[11.5px] font-bold uppercase tracking-[0.12em] text-black">
-                DIREKT-KONTAKT ZUM ATELIER (SCHÖNECK / MARRAKESCH)
+                DIREKT-KONTAKT ZUM ATELIER MAROKKO (CASABLANCA & MARRAKESCH)
               </span>
               <ShieldCheck className="w-4 h-4 text-black shrink-0" />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <a
                 href={whatsappUrl}
                 target="_blank"
@@ -275,7 +274,7 @@ export const PostPaymentModal: React.FC<PostPaymentModalProps> = ({
                 className="h-10 px-3 bg-black text-white text-[12px] font-bold uppercase tracking-[0.05em] hover:bg-neutral-800 inline-flex items-center justify-center gap-1.5"
               >
                 <MessageCircle className="w-3.5 h-3.5 shrink-0" />
-                <span>WhatsApp Direkt</span>
+                <span>WhatsApp Atelier Direkt</span>
               </a>
 
               <a
@@ -286,14 +285,6 @@ export const PostPaymentModal: React.FC<PostPaymentModalProps> = ({
               >
                 <Mail className="w-3.5 h-3.5 shrink-0" />
                 <span>service@mrkshi.com</span>
-              </a>
-
-              <a
-                href="tel:+4917643488260"
-                className="h-10 px-3 border border-black bg-white text-black text-[12px] font-bold uppercase tracking-[0.05em] hover:bg-black hover:text-white transition-colors inline-flex items-center justify-center gap-1.5 tabular-nums"
-              >
-                <Phone className="w-3.5 h-3.5 shrink-0" />
-                <span>+49 176 43488260</span>
               </a>
             </div>
           </div>

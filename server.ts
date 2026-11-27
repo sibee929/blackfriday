@@ -208,9 +208,9 @@ function createDefaultExporterSettings(): ExporterSettings {
     country: 'Morocco',
     iceNumber: 'En cours d’attribution',
     email: 'service@mrkshi.com',
-    phoneMorocco: '',
-    phoneSupportDe: '+49 176 43488260',
-    returnNameDe: 'MRKSHI',
+    phoneMorocco: '+212 753 310 471',
+    phoneSupportDe: '',
+    returnNameDe: 'MRKSHI Retouren-Programm',
     returnStreetDe: 'Alte Dorfstraße 3a',
     returnCityZipDe: '61137 Schöneck',
     defaultHsCode: '42031000',
@@ -348,12 +348,23 @@ function loadStoreState(): StoreState {
         pixelId: resolvedPixelId,
         enabled: savedPixel.pixelId ? Boolean(savedPixel.enabled) : true,
       },
-      exporterSettings: {
-        ...defaults.exporterSettings,
-        ...(parsed.exporterSettings && typeof parsed.exporterSettings === 'object'
-          ? parsed.exporterSettings
-          : {}),
-      },
+      exporterSettings: (() => {
+        const rawExp =
+          parsed.exporterSettings && typeof parsed.exporterSettings === 'object'
+            ? parsed.exporterSettings
+            : {};
+        const mergedExp = {
+          ...defaults.exporterSettings,
+          ...rawExp,
+        };
+        if (mergedExp.phoneSupportDe === '+49 176 43488260') {
+          mergedExp.phoneSupportDe = '';
+        }
+        if (!mergedExp.phoneMorocco) {
+          mergedExp.phoneMorocco = '+212 753 310 471';
+        }
+        return mergedExp;
+      })(),
       adminPasswordHash:
         typeof parsed.adminPasswordHash === 'string' ? parsed.adminPasswordHash : null,
       orderCounter: typeof parsed.orderCounter === 'number' ? parsed.orderCounter : 1001,
@@ -986,9 +997,9 @@ async function startServer() {
         '- Seltene Farben statt Standard-Schwarz: Bleu Petrol, Blue Majorelle, Rouge Hermès, Bordeaux, Olive, Espresso, Mitternachtsblau, Mint',
         '- Größen: Alle 9 Modelle von S bis 3XL plus kostenloses Sondermaß (vor & direkt nach Bezahlung)',
         '- Bundle-Vorteil: 20,00 € Sofortrabatt beim Kauf von 2+ Lederjacken · 10 € Treue-Gutschein: TREUE10',
-        '- Zahlung: Stripe Checkout mit Klarna, Apple Pay, Google Pay, PayPal, Visa/Mastercard & SEPA',
-        '- Rückgabe & Standort DE: 14 Tage Widerruf über Alte Dorfstraße 3a, 61137 Schöneck (Hessen)',
-        '- Kontakt: service@mrkshi.com · WhatsApp +49 176 43488260',
+        '- Zahlung: Stripe Checkout mit Klarna, Apple Pay, Google Pay, PayPal & Visa/Mastercard',
+        '- 14-Tage-Retouren-Programm: Unkomplizierte Rücksendung bei Standardgrößen über unsere Retouren-Annahmestelle (Alte Dorfstraße 3a, 61137 Schöneck)',
+        '- Unternehmenssitz & Atelier: Casablanca & Marrakesch, Marokko · Kontakt: service@mrkshi.com · WhatsApp Atelier: +212 753 310 471',
         '',
         '## Alle 9 Herren-Lederjacken Modelle',
         ...productLines,
@@ -1192,8 +1203,8 @@ async function startServer() {
 
     const preferredColor =
       typeof body.preferredColor === 'string' && body.preferredColor.trim()
-        ? body.preferredColor.trim().slice(0, 50)
-        : 'Alle seltenen Farben';
+        ? body.preferredColor.trim().slice(0, 260)
+        : 'Alle seltenen Ledertypen & Raritäten';
     const voucherCode = 'TREUE10';
 
     const existing = store.newsletter.find((n) => n.email === email);
@@ -1236,7 +1247,7 @@ async function startServer() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           chat_id: tgChatId,
-          text: `💌 NEUER NEWSLETTER & TREUE-KUNDE\n📧 ${email}\n🎨 Farb-Wunsch: ${preferredColor}\n🎟️ Code: ${voucherCode}`,
+          text: `💌 NEUER VIP RARITÄTEN & NEWSLETTER-KUNDE\n📧 ${email}\n🧥 Leder- & Muster-Wunsch: ${preferredColor}\n🎟️ Code: ${voucherCode}`,
           disable_web_page_preview: true,
         }),
       }).catch(() => {});
@@ -2754,7 +2765,7 @@ async function startServer() {
       mode: 'preview',
       status: 'paid',
       customerEmail: 'test@mrkshi.com',
-      whatsappNumber: '+4917643488260',
+      whatsappNumber: '+212753310471',
       measurementsSummary: '182 cm · 80 kg · Brust 104 cm (Regular Fit)',
       giftNote: 'Test-Benachrichtigung aus Reverse-Shopify Admin',
       totalCents: 17700,
