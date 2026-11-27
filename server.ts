@@ -126,6 +126,16 @@ interface ExporterSettings {
   dispatchMode: 'casablanca_direct' | 'schoeneck_hub';
 }
 
+interface CloudflareEmailConfig {
+  accountId: string;
+  apiToken: string;
+  fromAddress: string;
+  fromName: string;
+  autoOrderConfirmation: boolean;
+  autoTrackingEmail: boolean;
+  autoVoucherWelcome: boolean;
+}
+
 interface OrderRecord {
   id: string;
   sessionId: string;
@@ -141,6 +151,8 @@ interface OrderRecord {
   items: OrderItemRecord[];
   n8nSent: boolean;
   telegramSent: boolean;
+  emailSent?: boolean;
+  trackingEmailSent?: boolean;
   capiSent?: boolean;
   inventoryDecremented: boolean;
   shippingSummary?: string;
@@ -181,6 +193,7 @@ interface StoreState {
   oneEuroTestProductId: string | null;
   pixelConfig: PixelConfigState;
   exporterSettings: ExporterSettings;
+  cloudflareEmail: CloudflareEmailConfig;
   adminPasswordHash: string | null;
   orderCounter: number;
 }
@@ -240,6 +253,17 @@ function createDefaultState(): StoreState {
       tiktokPixelId: /^[A-Z0-9]{10,28}$/i.test(initialTiktok) ? initialTiktok : '',
     },
     exporterSettings: createDefaultExporterSettings(),
+    cloudflareEmail: {
+      accountId: cleanEnvSecret(process.env.CLOUDFLARE_ACCOUNT_ID),
+      apiToken:
+        cleanEnvSecret(process.env.CLOUDFLARE_EMAIL_API_TOKEN) ||
+        cleanEnvSecret(process.env.CLOUDFLARE_API_TOKEN),
+      fromAddress: cleanEnvSecret(process.env.CLOUDFLARE_EMAIL_FROM) || 'service@mrkshi.com',
+      fromName: 'MRKSHI Atelier',
+      autoOrderConfirmation: true,
+      autoTrackingEmail: true,
+      autoVoucherWelcome: true,
+    },
     adminPasswordHash: null,
     orderCounter: 1001,
   };
@@ -365,6 +389,19 @@ function loadStoreState(): StoreState {
         }
         return mergedExp;
       })(),
+      cloudflareEmail: {
+        ...defaults.cloudflareEmail,
+        ...(parsed.cloudflareEmail && typeof parsed.cloudflareEmail === 'object'
+          ? parsed.cloudflareEmail
+          : {}),
+        accountId:
+          cleanEnvSecret(process.env.CLOUDFLARE_ACCOUNT_ID) ||
+          (parsed.cloudflareEmail?.accountId ?? ''),
+        apiToken:
+          cleanEnvSecret(process.env.CLOUDFLARE_EMAIL_API_TOKEN) ||
+          cleanEnvSecret(process.env.CLOUDFLARE_API_TOKEN) ||
+          (parsed.cloudflareEmail?.apiToken ?? ''),
+      },
       adminPasswordHash:
         typeof parsed.adminPasswordHash === 'string' ? parsed.adminPasswordHash : null,
       orderCounter: typeof parsed.orderCounter === 'number' ? parsed.orderCounter : 1001,
@@ -800,6 +837,307 @@ async function dispatchOrderNotifications(
   return { n8nSent, telegramSent };
 }
 
+function resolveCloudflareEmailCredentials() {
+  const cfg = store.cloudflareEmail;
+  const accountId = (
+    cleanEnvSecret(process.env.CLOUDFLARE_ACCOUNT_ID) ||
+    cfg.accountId ||
+    ''
+  ).trim();
+  const apiToken = (
+    cleanEnvSecret(process.env.CLOUDFLARE_EMAIL_API_TOKEN) ||
+    cleanEnvSecret(process.env.CLOUDFLARE_API_TOKEN) ||
+    cfg.apiToken ||
+    ''
+  ).trim();
+  const fromAddress = (cfg.fromAddress || store.exporterSettings.email || 'service@mrkshi.com')
+    .trim()
+    .toLowerCase();
+  const fromName = (cfg.fromName || 'MRKSHI Atelier').trim();
+  return {
+    configured: Boolean(accountId && apiToken && fromAddress.includes('@')),
+    accountId,
+    apiToken,
+    fromAddress,
+    fromName,
+    autoOrderConfirmation: cfg.autoOrderConfirmation !== false,
+    autoTrackingEmail: cfg.autoTrackingEmail !== false,
+    autoVoucherWelcome: cfg.autoVoucherWelcome !== false,
+  };
+}
+
+function escapeHtml(raw: string): string {
+  return String(raw ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+async function sendCloudflareTransactionalEmail(params: {
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+}): Promise<{ ok: boolean; status?: string; detail: string }> {
+  const creds = resolveCloudflareEmailCredentials();
+  if (!creds.configured) {
+    return {
+      ok: false,
+      detail: 'Cloudflare Email Sending noch nicht verbunden (Account-ID & API-Token fehlen).',
+    };
+  }
+  const toClean = params.to.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(toClean)) {
+    return { ok: false, detail: 'Ungültige Empfänger-E-Mail-Adresse.' };
+  }
+
+  try {
+    const resp = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(creds.accountId)}/email/sending/send`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${creds.apiToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          to: toClean,
+          from: {
+            address: creds.fromAddress,
+            name: creds.fromName,
+          },
+          reply_to: creds.fromAddress,
+          subject: params.subject,
+          html: params.html,
+          text: params.text,
+        }),
+      }
+    );
+
+    const rawText = await resp.text();
+    let parsed: {
+      success?: boolean;
+      errors?: Array<{ code?: number | string; message?: string }>;
+      result?: {
+        delivered?: string[];
+        queued?: string[];
+        permanent_bounces?: string[];
+      };
+    } = {};
+    try {
+      parsed = JSON.parse(rawText);
+    } catch {
+      // non-json error fallback
+    }
+
+    if (!resp.ok || parsed.success === false) {
+      const errMsg =
+        parsed.errors?.map((e) => e.message).filter(Boolean).join(' · ') ||
+        rawText.slice(0, 180) ||
+        `HTTP ${resp.status}`;
+      console.error('[Cloudflare Email Sending Error]', resp.status, errMsg);
+      return { ok: false, detail: `Cloudflare API (${resp.status}): ${errMsg}` };
+    }
+
+    const bounced = parsed.result?.permanent_bounces ?? [];
+    if (bounced.length > 0) {
+      return {
+        ok: false,
+        status: 'bounced',
+        detail: `E-Mail abgewiesen (Permanent Bounce): ${bounced.join(', ')}`,
+      };
+    }
+
+    const delivered = parsed.result?.delivered ?? [];
+    const queued = parsed.result?.queued ?? [];
+    const status = delivered.length > 0 ? 'delivered' : queued.length > 0 ? 'queued' : 'sent';
+    return {
+      ok: true,
+      status,
+      detail:
+        status === 'delivered'
+          ? `Zugestellt an ${toClean} via ${creds.fromAddress}`
+          : `In Zustellung (${status}) an ${toClean} via ${creds.fromAddress}`,
+    };
+  } catch (err) {
+    console.error('[Cloudflare Email Network Error]', err);
+    return {
+      ok: false,
+      detail: err instanceof Error ? err.message : 'Netzwerkfehler zu Cloudflare Email API.',
+    };
+  }
+}
+
+async function sendOrderConfirmationEmail(
+  order: OrderRecord
+): Promise<{ ok: boolean; detail: string }> {
+  if (!order.customerEmail) {
+    return { ok: false, detail: 'Keine Kunden-E-Mail in der Bestellung hinterlegt.' };
+  }
+  const exp = store.exporterSettings;
+  const totalEur = (order.totalCents / 100).toFixed(2).replace('.', ',');
+  const greetingName =
+    order.shippingAddress?.name || order.customerName || 'MRKSHI Kunde';
+  const returnInfo = `${exp.returnNameDe}, ${exp.returnStreetDe}, ${exp.returnCityZipDe}`;
+
+  const itemsText = order.items
+    .map(
+      (i) =>
+        `- ${i.quantity}x ${i.name} | Farbe: ${i.colorName} | Größe: ${i.sizeLabel}${
+          i.customMeasure ? ` (${i.customMeasure})` : ''
+        }`
+    )
+    .join('\n');
+
+  const itemsHtml = order.items
+    .map(
+      (i) =>
+        `<tr>
+          <td style="padding:10px 0;border-bottom:1px solid #E5E5E5">
+            <strong>${escapeHtml(i.name)}</strong><br/>
+            <span style="color:#555;font-size:13px">Farbe: ${escapeHtml(i.colorName)} · Größe: ${escapeHtml(i.sizeLabel)}${
+          i.customMeasure ? ` · Maß: ${escapeHtml(i.customMeasure)}` : ''
+        }</span>
+          </td>
+          <td style="padding:10px 0;border-bottom:1px solid #E5E5E5;text-align:right;white-space:nowrap">
+            ${i.quantity} × ${((i.unitAmountCents / 100).toFixed(2)).replace('.', ',')} €
+          </td>
+        </tr>`
+    )
+    .join('');
+
+  const subject = `Deine MRKSHI Bestellbestätigung (${order.id})`;
+  const text = [
+    `Hallo ${greetingName},`,
+    ``,
+    `vielen Dank für deine Bestellung bei MRKSHI (${order.id})!`,
+    `Unsere Meister-Schneider im Lederatelier in Marokko bereiten deine Jacke jetzt vor.`,
+    ``,
+    `DEINE BESTELLUNG (${order.id}):`,
+    itemsText,
+    order.measurementsSummary ? `Maßchecker-Angaben: ${order.measurementsSummary}` : '',
+    ``,
+    `Gesamtbetrag (Bezahlt): ${totalEur} € (inkl. 0,00 € Express-Lieferung)`,
+    ``,
+    `Sobald dein Paket unser Atelier verlässt, erhältst du automatisch deine Sendungsnummer per E-Mail.`,
+    `Du möchtest noch ein genaues Körpermaß ergänzen? Antworte einfach direkt auf diese E-Mail (${exp.email}).`,
+    ``,
+    `14-Tage-Retouren-Programm (bei Standardgrößen): ${returnInfo}`,
+    ``,
+    `Herzliche Grüße`,
+    `${exp.companyName} · Casablanca & Marrakesch, Marokko`,
+    `https://www.mrkshi.com`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  const html = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;color:#111;background:#fff;border:2px solid #000">
+    <div style="background:#0B0B0B;color:#fff;padding:22px 26px;border-bottom:2px solid #D6B370">
+      <div style="font-size:24px;font-weight:900;letter-spacing:0.08em">MRKSHI</div>
+      <div style="font-size:11px;color:#D6B370;letter-spacing:0.14em;text-transform:uppercase;margin-top:4px">Lederatelier · Casablanca &amp; Marrakesch</div>
+    </div>
+    <div style="padding:26px;font-size:14px;line-height:1.6">
+      <h2 style="margin:0 0 12px;font-size:20px">Vielen Dank für deine Bestellung, ${escapeHtml(greetingName)}!</h2>
+      <p style="margin:0 0 16px;color:#333">Deine Bestellung <strong>${escapeHtml(order.id)}</strong> ist bezahlt und liegt jetzt in unserem Atelier in Marokko zur Qualitäts- &amp; Maßprüfung bereit.</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0">${itemsHtml}</table>
+      ${
+        order.measurementsSummary
+          ? `<div style="padding:10px 12px;background:#F7F7F7;border-left:3px solid #000;font-size:13px;margin-bottom:14px"><strong>Hinterlegtes Maß:</strong> ${escapeHtml(order.measurementsSummary)}</div>`
+          : ''
+      }
+      <div style="padding:12px 14px;background:#0B0B0B;color:#fff;font-weight:700;display:flex;justify-content:space-between">
+        <span>Gesamtbetrag (inkl. 0,00 € Express-Versand):</span>
+        <span style="margin-left:auto">${totalEur} €</span>
+      </div>
+      <p style="margin:18px 0 0;font-size:13px;color:#444">Sobald dein MRKSHI Paket unterwegs ist, senden wir dir sofort deinen Tracking-Link. Falls du uns noch ein Sondermaß durchgeben möchtest, antworte einfach direkt auf diese E-Mail.</p>
+    </div>
+    <div style="padding:14px 26px;background:#F8F8F8;border-top:1px solid #E5E5E5;font-size:11.5px;color:#555;line-height:1.5">
+      <strong>${escapeHtml(exp.companyName)}</strong> · ${escapeHtml(exp.cityZip)}, ${escapeHtml(exp.country)} · <a href="https://www.mrkshi.com" style="color:#000">www.mrkshi.com</a><br/>
+      14-Tage-Retouren-Programm (Standardgrößen): ${escapeHtml(returnInfo)}
+    </div>
+  </div>`;
+
+  const res = await sendCloudflareTransactionalEmail({
+    to: order.customerEmail,
+    subject,
+    html,
+    text,
+  });
+  if (res.ok) {
+    order.emailSent = true;
+    persistStoreState();
+  }
+  return res;
+}
+
+async function sendOrderTrackingEmail(
+  order: OrderRecord
+): Promise<{ ok: boolean; detail: string }> {
+  if (!order.customerEmail) {
+    return { ok: false, detail: 'Keine Kunden-E-Mail hinterlegt.' };
+  }
+  const exp = store.exporterSettings;
+  const carrier = order.carrier || 'DHL Express';
+  const trk = (order.trackingNumber || '').trim();
+  const trackUrl = trk
+    ? carrier.toLowerCase().includes('ups')
+      ? `https://www.ups.com/track?tracknum=${encodeURIComponent(trk)}`
+      : `https://www.dhl.de/de/privatkunden/pakete-empfangen/verfolgen.html?piececode=${encodeURIComponent(trk)}`
+    : 'https://www.mrkshi.com';
+  const greetingName =
+    order.shippingAddress?.name || order.customerName || 'MRKSHI Kunde';
+
+  const subject = `Dein MRKSHI Paket (${order.id}) ist unterwegs!`;
+  const text = [
+    `Hallo ${greetingName},`,
+    ``,
+    `gute Nachrichten: Deine handgefertigte MRKSHI Lederjacke (${order.id}) wurde versendet!`,
+    `Versanddienstleister: ${carrier}`,
+    trk ? `Sendungsnummer: ${trk}` : '',
+    trk ? `Live-Sendungsverfolgung: ${trackUrl}` : '',
+    ``,
+    `Wir wünschen dir viel Freude beim Auspacken!`,
+    `${exp.companyName} · https://www.mrkshi.com`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  const html = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;color:#111;background:#fff;border:2px solid #000">
+    <div style="background:#0B0B0B;color:#fff;padding:22px 26px;border-bottom:2px solid #D6B370">
+      <div style="font-size:24px;font-weight:900;letter-spacing:0.08em">MRKSHI</div>
+      <div style="font-size:11px;color:#D6B370;letter-spacing:0.14em;text-transform:uppercase;margin-top:4px">Versandbestätigung · ${escapeHtml(order.id)}</div>
+    </div>
+    <div style="padding:26px;font-size:14px;line-height:1.6">
+      <h2 style="margin:0 0 12px;font-size:20px">Dein MRKSHI Paket ist auf dem Weg, ${escapeHtml(greetingName)}!</h2>
+      <p style="margin:0 0 16px;color:#333">Deine Lederjacke hat unsere Endkontrolle bestanden und wurde im Seidenpapier &amp; Atelier-Karton an <strong>${escapeHtml(carrier)}</strong> übergeben.</p>
+      ${
+        trk
+          ? `<div style="padding:14px 16px;background:#F8F8F8;border:1.5px solid #000;margin:16px 0">
+              <div style="font-size:12px;color:#555;text-transform:uppercase">Sendungsnummer (${escapeHtml(carrier)})</div>
+              <div style="font-family:monospace;font-size:18px;font-weight:900;margin:4px 0 12px">${escapeHtml(trk)}</div>
+              <a href="${escapeHtml(trackUrl)}" style="display:inline-block;padding:10px 18px;background:#000;color:#fff;text-decoration:none;font-weight:700;font-size:13px">Sendung jetzt live verfolgen →</a>
+            </div>`
+          : ''
+      }
+      <p style="margin:16px 0 0;font-size:13px;color:#444">Bei Fragen erreichst du uns jederzeit per Antwort auf diese E-Mail (${escapeHtml(exp.email)}).</p>
+    </div>
+  </div>`;
+
+  const res = await sendCloudflareTransactionalEmail({
+    to: order.customerEmail,
+    subject,
+    html,
+    text,
+  });
+  if (res.ok) {
+    order.trackingEmailSent = true;
+    order.emailSent = true;
+    persistStoreState();
+  }
+  return res;
+}
+
 async function markOrderPaidAndDispatch(order: OrderRecord): Promise<OrderRecord> {
   const wasAlreadyPaid = order.status === 'paid';
   order.status = 'paid';
@@ -833,6 +1171,11 @@ async function markOrderPaidAndDispatch(order: OrderRecord): Promise<OrderRecord
       order.capiSent = true;
       persistStoreState();
     }
+  }
+
+  const emailCreds = resolveCloudflareEmailCredentials();
+  if (emailCreds.configured && emailCreds.autoOrderConfirmation && order.customerEmail && !order.emailSent) {
+    await sendOrderConfirmationEmail(order);
   }
 
   // Record verified paid order in 1st-party analytics (idempotent by order.id)
@@ -1324,6 +1667,37 @@ async function startServer() {
           text: `💌 NEUER VIP RARITÄTEN & NEWSLETTER-KUNDE\n📧 ${email}\n🧥 Leder- & Muster-Wunsch: ${preferredColor}\n🎟️ Code: ${voucherCode}`,
           disable_web_page_preview: true,
         }),
+      }).catch(() => {});
+    }
+
+    const emailCreds = resolveCloudflareEmailCredentials();
+    if (emailCreds.configured && emailCreds.autoVoucherWelcome) {
+      sendCloudflareTransactionalEmail({
+        to: email,
+        subject: `Dein 10 € MRKSHI Code (${voucherCode}) & Zugang zur Raritäten-Liste`,
+        text: [
+          `Willkommen im MRKSHI Atelier-Insider-Verteiler!`,
+          ``,
+          `Dein persönlicher 10,00 € Sofort-Gutschein lautet: ${voucherCode}`,
+          `Einlösbar direkt im Warenkorb auf https://www.mrkshi.com`,
+          ``,
+          `Deine hinterlegten Leder- & Muster-Wünsche: ${preferredColor}`,
+          `Sobald neue Einzelteile und Sonderhäute aus unserem Atelier verfügbar sind, informieren wir dich zuerst.`,
+          ``,
+          `MRKSHI Atelier · Casablanca & Marrakesch`,
+        ].join('\n'),
+        html: `<div style="font-family:Arial,Helvetica,sans-serif;max-width:580px;margin:0 auto;color:#111;border:2px solid #000;background:#fff">
+          <div style="background:#0B0B0B;color:#fff;padding:20px 24px;border-bottom:2px solid #D6B370">
+            <div style="font-size:22px;font-weight:900;letter-spacing:0.08em">MRKSHI</div>
+            <div style="font-size:11px;color:#D6B370;letter-spacing:0.14em;text-transform:uppercase;margin-top:4px">Raritäten-Liste &amp; Treue-Vorteil</div>
+          </div>
+          <div style="padding:24px;font-size:14px;line-height:1.6">
+            <h2 style="margin:0 0 10px;font-size:20px">Willkommen auf der MRKSHI Insider-Liste!</h2>
+            <p style="margin:0 0 14px">Deine gewünschten Ledertypen (<strong>${escapeHtml(preferredColor)}</strong>) sind vermerkt. Dein 10,00 € Sofort-Code für deine Bestellung lautet:</p>
+            <div style="padding:14px;background:#0B0B0B;color:#D6B370;font-family:monospace;font-size:22px;font-weight:900;text-align:center;letter-spacing:0.12em">${voucherCode}</div>
+            <p style="margin:16px 0 0"><a href="https://www.mrkshi.com" style="display:inline-block;padding:10px 18px;background:#000;color:#fff;text-decoration:none;font-weight:700">Jetzt im Shop einlösen →</a></p>
+          </div>
+        </div>`,
       }).catch(() => {});
     }
 
@@ -1999,12 +2373,24 @@ async function startServer() {
       ? 'test'
       : 'unset';
 
+    const cfEmail = resolveCloudflareEmailCredentials();
+
     res.json({
       products: store.products,
       orders: store.orders,
       newsletter: store.newsletter,
       oneEuroTestProductId: store.oneEuroTestProductId,
       exporterSettings: store.exporterSettings,
+      cloudflareEmail: {
+        configured: cfEmail.configured,
+        accountId: cfEmail.accountId,
+        hasApiToken: Boolean(cfEmail.apiToken),
+        fromAddress: cfEmail.fromAddress,
+        fromName: cfEmail.fromName,
+        autoOrderConfirmation: cfEmail.autoOrderConfirmation,
+        autoTrackingEmail: cfEmail.autoTrackingEmail,
+        autoVoucherWelcome: cfEmail.autoVoucherWelcome,
+      },
       integrations: {
         stripeConfigured: Boolean(sk),
         stripeMode,
@@ -2015,9 +2401,123 @@ async function startServer() {
             cleanEnvSecret(process.env.TELEGRAM_CHAT_ID)
         ),
         capiConfigured: Boolean(cleanEnvSecret(process.env.META_CAPI_ACCESS_TOKEN)),
+        emailConfigured: cfEmail.configured,
+        emailFrom: cfEmail.fromAddress,
         pixelId: store.pixelConfig.pixelId || '',
         domain: 'www.mrkshi.com',
       },
+    });
+  });
+
+  app.put('/api/admin/cloudflare-email', requireAdminAuth, (req: Request, res: Response) => {
+    const body = (req.body ?? {}) as {
+      accountId?: unknown;
+      apiToken?: unknown;
+      fromAddress?: unknown;
+      fromName?: unknown;
+      autoOrderConfirmation?: unknown;
+      autoTrackingEmail?: unknown;
+      autoVoucherWelcome?: unknown;
+    };
+
+    const cur = store.cloudflareEmail;
+    if (typeof body.accountId === 'string') {
+      cur.accountId = body.accountId.trim().slice(0, 80);
+    }
+    if (typeof body.apiToken === 'string' && body.apiToken.trim().length > 0) {
+      cur.apiToken = body.apiToken.trim().slice(0, 200);
+    }
+    if (typeof body.fromAddress === 'string' && body.fromAddress.includes('@')) {
+      cur.fromAddress = body.fromAddress.trim().toLowerCase().slice(0, 100);
+    }
+    if (typeof body.fromName === 'string' && body.fromName.trim()) {
+      cur.fromName = body.fromName.trim().slice(0, 80);
+    }
+    if (typeof body.autoOrderConfirmation === 'boolean') {
+      cur.autoOrderConfirmation = body.autoOrderConfirmation;
+    }
+    if (typeof body.autoTrackingEmail === 'boolean') {
+      cur.autoTrackingEmail = body.autoTrackingEmail;
+    }
+    if (typeof body.autoVoucherWelcome === 'boolean') {
+      cur.autoVoucherWelcome = body.autoVoucherWelcome;
+    }
+
+    persistStoreState();
+    const resolved = resolveCloudflareEmailCredentials();
+    res.json({
+      ok: true,
+      cloudflareEmail: {
+        configured: resolved.configured,
+        accountId: resolved.accountId,
+        hasApiToken: Boolean(resolved.apiToken),
+        fromAddress: resolved.fromAddress,
+        fromName: resolved.fromName,
+        autoOrderConfirmation: resolved.autoOrderConfirmation,
+        autoTrackingEmail: resolved.autoTrackingEmail,
+        autoVoucherWelcome: resolved.autoVoucherWelcome,
+      },
+      message: resolved.configured
+        ? `Cloudflare Email Sending verbunden (${resolved.fromAddress}).`
+        : 'Einstellungen gespeichert (bitte Account-ID & API-Token ergänzen).',
+    });
+  });
+
+  app.post('/api/admin/test-email', requireAdminAuth, async (req: Request, res: Response) => {
+    const body = (req.body ?? {}) as { to?: unknown };
+    const to = typeof body.to === 'string' ? body.to.trim().toLowerCase() : '';
+    if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+      res.status(400).json({ error: 'Bitte eine echte Empfänger-E-Mail-Adresse eingeben.' });
+      return;
+    }
+    const creds = resolveCloudflareEmailCredentials();
+    const result = await sendCloudflareTransactionalEmail({
+      to,
+      subject: 'MRKSHI Atelier — Cloudflare Email Live-Test erfolgreich',
+      text: `Dein Cloudflare Email Sending über ${creds.fromAddress} (www.mrkshi.com) ist aktiv und SPF/DKIM-signiert.`,
+      html: `<div style="font-family:Arial,sans-serif;max-width:540px;margin:0 auto;border:2px solid #000;background:#fff;color:#111">
+        <div style="background:#0B0B0B;color:#fff;padding:18px 22px;border-bottom:2px solid #D6B370">
+          <strong style="font-size:20px;letter-spacing:0.08em">MRKSHI</strong> · <span style="color:#D6B370;font-size:12px">CLOUDFLARE EMAIL TEST</span>
+        </div>
+        <div style="padding:22px;font-size:14px;line-height:1.6">
+          <p style="margin:0 0 10px"><strong>✓ Verbindung steht!</strong></p>
+          <p style="margin:0;color:#444">Dein MRKSHI Shop versendet jetzt Bestellbestätigungen, Tracking-Nummern und Gutschein-Codes direkt über <strong>${escapeHtml(creds.fromAddress)}</strong> mit automatischer Cloudflare SPF- &amp; DKIM-Signatur.</p>
+        </div>
+      </div>`,
+    });
+    if (!result.ok) {
+      res.status(400).json({ error: result.detail });
+      return;
+    }
+    res.json({ ok: true, message: result.detail });
+  });
+
+  app.post('/api/admin/orders/:id/send-email', requireAdminAuth, async (req: Request, res: Response) => {
+    const order = store.orders.find((o) => o.id === req.params.id);
+    if (!order) {
+      res.status(404).json({ error: 'Bestellung nicht gefunden.' });
+      return;
+    }
+    const body = (req.body ?? {}) as { type?: unknown };
+    const mailType =
+      body.type === 'tracking' || (body.type !== 'confirmation' && Boolean(order.trackingNumber))
+        ? 'tracking'
+        : 'confirmation';
+
+    const result =
+      mailType === 'tracking'
+        ? await sendOrderTrackingEmail(order)
+        : await sendOrderConfirmationEmail(order);
+
+    if (!result.ok) {
+      res.status(400).json({ error: result.detail });
+      return;
+    }
+    res.json({
+      ok: true,
+      order,
+      orders: store.orders,
+      message: `${mailType === 'tracking' ? 'Tracking-Mail' : 'Bestellbestätigung'} gesendet: ${result.detail}`,
     });
   });
 
@@ -2161,6 +2661,7 @@ async function startServer() {
       order.shippingSummary = formatShippingSummaryFromAddress(nextAddr);
     }
 
+    const wasShippedBefore = order.fulfillmentStatus === 'shipped' && Boolean(order.trackingEmailSent);
     if (body.status === 'paid' && order.status !== 'paid') {
       await markOrderPaidAndDispatch(order);
     } else if (body.status === 'pending_payment' || body.status === 'cancelled') {
@@ -2168,6 +2669,18 @@ async function startServer() {
       persistStoreState();
     } else {
       persistStoreState();
+    }
+
+    const cfCreds = resolveCloudflareEmailCredentials();
+    if (
+      cfCreds.configured &&
+      cfCreds.autoTrackingEmail &&
+      !wasShippedBefore &&
+      order.fulfillmentStatus === 'shipped' &&
+      order.trackingNumber &&
+      order.customerEmail
+    ) {
+      await sendOrderTrackingEmail(order);
     }
 
     res.json({

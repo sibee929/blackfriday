@@ -95,6 +95,8 @@ interface OrderRecord {
   items: OrderItemRecord[];
   n8nSent: boolean;
   telegramSent: boolean;
+  emailSent?: boolean;
+  trackingEmailSent?: boolean;
   shippingSummary?: string;
   shippingAddress?: OrderShippingAddress;
   fulfillmentStatus?: 'unfulfilled' | 'in_production' | 'shipped';
@@ -114,6 +116,17 @@ interface NewsletterSubscriber {
   createdAt: string;
 }
 
+interface CloudflareEmailState {
+  configured: boolean;
+  accountId: string;
+  hasApiToken: boolean;
+  fromAddress: string;
+  fromName: string;
+  autoOrderConfirmation: boolean;
+  autoTrackingEmail: boolean;
+  autoVoucherWelcome: boolean;
+}
+
 interface AdminIntegrationsStatus {
   stripeConfigured: boolean;
   stripeMode?: 'live' | 'test' | 'unset';
@@ -121,6 +134,8 @@ interface AdminIntegrationsStatus {
   n8nConfigured: boolean;
   telegramConfigured: boolean;
   capiConfigured: boolean;
+  emailConfigured?: boolean;
+  emailFrom?: string;
   pixelId?: string;
   domain: string;
 }
@@ -131,6 +146,7 @@ interface AdminStateResponse {
   newsletter: NewsletterSubscriber[];
   oneEuroTestProductId: string | null;
   exporterSettings?: ExporterSettings;
+  cloudflareEmail?: CloudflareEmailState;
   integrations: AdminIntegrationsStatus;
 }
 
@@ -256,6 +272,16 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
   >('analytics');
   const [adminState, setAdminState] = useState<AdminStateResponse | null>(null);
   const [exporterDraft, setExporterDraft] = useState<ExporterSettings>(DEFAULT_EXPORTER_SETTINGS);
+  const [cfEmailDraft, setCfEmailDraft] = useState({
+    accountId: '',
+    apiToken: '',
+    fromAddress: 'service@mrkshi.com',
+    fromName: 'MRKSHI Atelier',
+    autoOrderConfirmation: true,
+    autoTrackingEmail: true,
+    autoVoucherWelcome: true,
+  });
+  const [testEmailRecipient, setTestEmailRecipient] = useState<string>('');
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [orderEditDraft, setOrderEditDraft] = useState<{
     status: OrderRecord['status'];
@@ -320,6 +346,18 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
     setAdminState(data);
     if (data.exporterSettings) {
       setExporterDraft({ ...DEFAULT_EXPORTER_SETTINGS, ...data.exporterSettings });
+    }
+    if (data.cloudflareEmail) {
+      setCfEmailDraft((prev) => ({
+        ...prev,
+        accountId: data.cloudflareEmail!.accountId || '',
+        apiToken: '',
+        fromAddress: data.cloudflareEmail!.fromAddress || 'service@mrkshi.com',
+        fromName: data.cloudflareEmail!.fromName || 'MRKSHI Atelier',
+        autoOrderConfirmation: data.cloudflareEmail!.autoOrderConfirmation,
+        autoTrackingEmail: data.cloudflareEmail!.autoTrackingEmail,
+        autoVoucherWelcome: data.cloudflareEmail!.autoVoucherWelcome,
+      }));
     }
   }, []);
 
@@ -637,6 +675,101 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
         );
       }
       setToastMsg(data.message ?? 'Benachrichtigung ausgeführt.');
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleSendOrderEmail = async (orderId: string) => {
+    if (!token) return;
+    setBusyAction(`mail-${orderId}`);
+    setToastMsg(null);
+    try {
+      const res = await fetch(`/api/admin/orders/${encodeURIComponent(orderId)}/send-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({}),
+      });
+      const data = (await res.json()) as {
+        orders?: OrderRecord[];
+        message?: string;
+        error?: string;
+      };
+      if (res.ok && data.orders) {
+        setAdminState((prev) => (prev ? { ...prev, orders: data.orders! } : prev));
+        setToastMsg(data.message ?? 'E-Mail an Kunden gesendet.');
+      } else {
+        setToastMsg(data.error ?? 'E-Mail konnte nicht gesendet werden.');
+      }
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleSaveCloudflareEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token) return;
+    setBusyAction('save-cf-email');
+    setToastMsg(null);
+    try {
+      const res = await fetch('/api/admin/cloudflare-email', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(cfEmailDraft),
+      });
+      const data = (await res.json()) as {
+        cloudflareEmail?: CloudflareEmailState;
+        message?: string;
+        error?: string;
+      };
+      if (res.ok && data.cloudflareEmail) {
+        setAdminState((prev) =>
+          prev
+            ? {
+                ...prev,
+                cloudflareEmail: data.cloudflareEmail,
+                integrations: {
+                  ...prev.integrations,
+                  emailConfigured: data.cloudflareEmail!.configured,
+                  emailFrom: data.cloudflareEmail!.fromAddress,
+                },
+              }
+            : prev
+        );
+        setCfEmailDraft((prev) => ({ ...prev, apiToken: '' }));
+        setToastMsg(data.message ?? 'Cloudflare Email Einstellungen gespeichert.');
+      } else {
+        setToastMsg(data.error ?? 'Speichern fehlgeschlagen.');
+      }
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleSendTestEmail = async () => {
+    if (!token || !testEmailRecipient.trim()) {
+      setToastMsg('Bitte zuerst eine Empfänger-E-Mail für den Test eingeben.');
+      return;
+    }
+    setBusyAction('test-cf-email');
+    setToastMsg(null);
+    try {
+      const res = await fetch('/api/admin/test-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ to: testEmailRecipient.trim() }),
+      });
+      const data = (await res.json()) as { message?: string; error?: string };
+      setToastMsg(res.ok ? data.message ?? 'Test-Mail gesendet!' : data.error ?? 'Fehler beim Senden.');
     } finally {
       setBusyAction(null);
     }
@@ -3267,6 +3400,29 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
                                 <Send className="w-3.5 h-3.5" />
                                 <span>n8n</span>
                               </button>
+                              {consignee.email && (
+                                <button
+                                  type="button"
+                                  disabled={busyAction === `mail-${order.id}`}
+                                  onClick={() => handleSendOrderEmail(order.id)}
+                                  className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border text-[12px] font-semibold cursor-pointer ${
+                                    order.trackingEmailSent || order.emailSent
+                                      ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                                      : 'bg-white border-black/25 text-black hover:border-black'
+                                  }`}
+                                >
+                                  <Mail className="w-3.5 h-3.5" />
+                                  <span>
+                                    {order.trackingNumber
+                                      ? order.trackingEmailSent
+                                        ? '✓ Tracking-Mail'
+                                        : 'Tracking-Mail senden'
+                                      : order.emailSent
+                                      ? '✓ Bestätigt per Mail'
+                                      : 'Bestätigung mailen'}
+                                  </span>
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -3726,9 +3882,16 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
                         }`,
                       },
                       {
-                        label: 'Cloudflare & SEO',
+                        label: 'Cloudflare Email Sending',
+                        active: Boolean(adminState.integrations.emailConfigured),
+                        hint: adminState.integrations.emailConfigured
+                          ? `Aktiv über ${adminState.integrations.emailFrom ?? 'service@mrkshi.com'}`
+                          : 'Offen — unten in 60 Sek. verbinden',
+                      },
+                      {
+                        label: 'Cloudflare, SEO & Feeds',
                         active: true,
-                        hint: `${adminState.integrations.domain} · /sitemap.xml · /llms.txt`,
+                        hint: `${adminState.integrations.domain} · /sitemap.xml · /products-feed.xml`,
                       },
                     ].map((card) => (
                       <div
@@ -3784,6 +3947,174 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
                       </button>
                     </div>
                   </div>
+
+                  {/* Cloudflare Email Sending Setup & Live Test */}
+                  <form
+                    onSubmit={handleSaveCloudflareEmail}
+                    className="p-5 rounded-xl border-2 border-black bg-white space-y-4"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <span className="inline-block px-2 py-0.5 rounded bg-black text-white text-[10.5px] font-bold uppercase tracking-wider">
+                          CLOUDFLARE EMAIL SERVICE · SERVICE@MRKSHI.COM
+                        </span>
+                        <h4 className="mt-1.5 text-[16px] font-bold text-black">
+                          Transaktions-E-Mails direkt über eure Cloudflare-Domain versenden
+                        </h4>
+                        <p className="text-[12.5px] text-neutral-600 mt-0.5">
+                          1. Im Cloudflare-Dashboard unter{' '}
+                          <strong>Compute &amp; AI → Email Service → Email Sending</strong> einmal{' '}
+                          <strong>mrkshi.com onboarden</strong> (setzt SPF &amp; DKIM automatisch).
+                          2. Einen API-Token mit Berechtigung <strong>Email Sending: Edit</strong>{' '}
+                          erstellen und unten eintragen.
+                        </p>
+                      </div>
+                      <a
+                        href="https://dash.cloudflare.com/?to=/:account/email-service"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-black bg-neutral-50 text-[12px] font-bold hover:bg-black hover:text-white"
+                      >
+                        <span>Cloudflare Email öffnen</span>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-[12.5px]">
+                      <label className="block">
+                        <span className="font-bold">Cloudflare Account-ID</span>
+                        <input
+                          value={cfEmailDraft.accountId}
+                          onChange={(e) =>
+                            setCfEmailDraft({ ...cfEmailDraft, accountId: e.target.value })
+                          }
+                          placeholder="32-stellige Account-ID"
+                          className="mt-1 w-full h-9 px-3 rounded-lg border border-black/20 font-mono text-[12px]"
+                        />
+                      </label>
+
+                      <label className="block">
+                        <span className="font-bold">
+                          Cloudflare Email API-Token{' '}
+                          {adminState.cloudflareEmail?.hasApiToken ? '(✓ hinterlegt)' : ''}
+                        </span>
+                        <input
+                          type="password"
+                          value={cfEmailDraft.apiToken}
+                          onChange={(e) =>
+                            setCfEmailDraft({ ...cfEmailDraft, apiToken: e.target.value })
+                          }
+                          placeholder={
+                            adminState.cloudflareEmail?.hasApiToken
+                              ? '•••••••• (leer lassen zum Behalten)'
+                              : 'Bearer Token einfügen…'
+                          }
+                          className="mt-1 w-full h-9 px-3 rounded-lg border border-black/20 font-mono text-[12px]"
+                        />
+                      </label>
+
+                      <label className="block">
+                        <span className="font-bold">Absender-Adresse (@mrkshi.com)</span>
+                        <input
+                          type="email"
+                          value={cfEmailDraft.fromAddress}
+                          onChange={(e) =>
+                            setCfEmailDraft({ ...cfEmailDraft, fromAddress: e.target.value })
+                          }
+                          placeholder="service@mrkshi.com"
+                          className="mt-1 w-full h-9 px-3 rounded-lg border border-black/20"
+                        />
+                      </label>
+
+                      <label className="block">
+                        <span className="font-bold">Absender-Name</span>
+                        <input
+                          value={cfEmailDraft.fromName}
+                          onChange={(e) =>
+                            setCfEmailDraft({ ...cfEmailDraft, fromName: e.target.value })
+                          }
+                          placeholder="MRKSHI Atelier"
+                          className="mt-1 w-full h-9 px-3 rounded-lg border border-black/20"
+                        />
+                      </label>
+                    </div>
+
+                    <div className="flex flex-wrap gap-4 text-[12.5px] font-medium pt-1">
+                      <label className="inline-flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={cfEmailDraft.autoOrderConfirmation}
+                          onChange={(e) =>
+                            setCfEmailDraft({
+                              ...cfEmailDraft,
+                              autoOrderConfirmation: e.target.checked,
+                            })
+                          }
+                          className="w-4 h-4 accent-black"
+                        />
+                        <span>Automatische Bestellbestätigung bei Kauf</span>
+                      </label>
+                      <label className="inline-flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={cfEmailDraft.autoTrackingEmail}
+                          onChange={(e) =>
+                            setCfEmailDraft({
+                              ...cfEmailDraft,
+                              autoTrackingEmail: e.target.checked,
+                            })
+                          }
+                          className="w-4 h-4 accent-black"
+                        />
+                        <span>Automatische Tracking-Mail bei „Versendet“</span>
+                      </label>
+                      <label className="inline-flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={cfEmailDraft.autoVoucherWelcome}
+                          onChange={(e) =>
+                            setCfEmailDraft({
+                              ...cfEmailDraft,
+                              autoVoucherWelcome: e.target.checked,
+                            })
+                          }
+                          className="w-4 h-4 accent-black"
+                        />
+                        <span>Automatische TREUE10-Willkommensmail</span>
+                      </label>
+                    </div>
+
+                    <div className="pt-3 border-t border-black/10 flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex flex-wrap items-center gap-2 flex-1 min-w-[260px]">
+                        <input
+                          type="email"
+                          value={testEmailRecipient}
+                          onChange={(e) => setTestEmailRecipient(e.target.value)}
+                          placeholder="deine-eigene@email.de für Live-Test…"
+                          className="h-9 px-3 rounded-lg border border-black/20 text-[12.5px] flex-1 max-w-xs"
+                        />
+                        <button
+                          type="button"
+                          disabled={busyAction === 'test-cf-email'}
+                          onClick={handleSendTestEmail}
+                          className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg border border-black bg-neutral-50 text-[12px] font-bold hover:bg-black hover:text-white cursor-pointer"
+                        >
+                          <Mail className="w-3.5 h-3.5" />
+                          <span>
+                            {busyAction === 'test-cf-email' ? 'Sendet…' : 'Test-Mail senden'}
+                          </span>
+                        </button>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={busyAction === 'save-cf-email'}
+                        className="h-9 px-5 rounded-lg bg-[#16A34A] hover:bg-[#15803D] text-white text-[12.5px] font-bold cursor-pointer"
+                      >
+                        ✓ Cloudflare Email speichern
+                      </button>
+                    </div>
+                  </form>
                 </div>
               )}
             </div>
