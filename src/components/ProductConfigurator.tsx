@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, Expand, Gift, Ruler, ShoppingBag, Sparkles, X } from 'lucide-react';
 import {
   EU_SIZES,
   GalleryShot,
-  getAllKhabibiUrls,
   KHABIBI_COLORS,
   KHABIBI_DETAIL_SHOTS,
   KhabibiColorVariant,
@@ -104,40 +104,17 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
 
   const sectionRef = useRef<HTMLElement | null>(null);
 
+  // Only preload active color front & model look (never dump 35 MB of gallery images at once)
   useEffect(() => {
-    preloadGalleryImages(getAllKhabibiUrls());
-  }, []);
+    const immediate = [activeVariant.frontImage, activeVariant.modelLookImage].filter(
+      Boolean
+    ) as string[];
+    preloadGalleryImages(immediate);
+  }, [activeVariant]);
 
   useEffect(() => {
     setActiveShotId(`front-${activeVariant.id}`);
   }, [activeVariant.id]);
-
-  // Subtle scroll-reveal motion via IntersectionObserver + WAAPI
-  useEffect(() => {
-    const el = sectionRef.current;
-    if (!el || typeof IntersectionObserver === 'undefined') return;
-    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
-
-    const obs = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            el.animate(
-              [
-                { opacity: 0.78, transform: 'translateY(18px)' },
-                { opacity: 1, transform: 'translateY(0px)' },
-              ],
-              { duration: 480, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'both' }
-            );
-            obs.disconnect();
-          }
-        }
-      },
-      { threshold: 0.08 }
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, []);
 
   const activeIdx = Math.max(
     0,
@@ -517,34 +494,37 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
         onApplyResult={handleApplyMassChecker}
       />
 
-      {zoomOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          onClick={() => setZoomOpen(false)}
-          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-xs flex items-center justify-center p-4"
-        >
+      {typeof document !== 'undefined' &&
+        zoomOpen &&
+        createPortal(
           <div
-            onClick={(e) => e.stopPropagation()}
-            className="relative max-w-3xl w-full bg-white border-2 border-black overflow-hidden"
+            role="dialog"
+            aria-modal="true"
+            onClick={() => setZoomOpen(false)}
+            className="fixed inset-0 z-50 bg-black/85 backdrop-blur-xs flex items-center justify-center p-4"
           >
-            <button
-              type="button"
-              onClick={() => setZoomOpen(false)}
-              aria-label="Schließen"
-              className="absolute right-3 top-3 z-10 w-9 h-9 bg-black text-white flex items-center justify-center cursor-pointer"
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="relative max-w-3xl w-full bg-white border-2 border-black overflow-hidden"
             >
-              <X className="w-4 h-4" />
-            </button>
-            <img
-              src={activeShot.src}
-              alt={activeShot.label}
-              referrerPolicy="no-referrer"
-              className="w-full max-h-[82vh] object-contain bg-white"
-            />
-          </div>
-        </div>
-      )}
+              <button
+                type="button"
+                onClick={() => setZoomOpen(false)}
+                aria-label="Schließen"
+                className="absolute right-3 top-3 z-10 w-9 h-9 bg-black text-white flex items-center justify-center cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              <img
+                src={activeShot.src}
+                alt={activeShot.label}
+                referrerPolicy="no-referrer"
+                className="w-full max-h-[82vh] object-contain bg-white"
+              />
+            </div>
+          </div>,
+          document.body
+        )}
     </section>
   );
 };

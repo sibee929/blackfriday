@@ -58,6 +58,8 @@ interface OrderRecord {
   shippingSummary?: string;
   clientIp?: string;
   clientUserAgent?: string;
+  fbc?: string;
+  fbp?: string;
   createdAt: string;
   paidAt?: string;
 }
@@ -257,23 +259,7 @@ function requireAdminAuth(req: Request, res: Response, next: NextFunction): void
 function isSafeWebhookUrl(rawUrl: string): boolean {
   try {
     const parsed = new URL(rawUrl);
-    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false;
-    const host = parsed.hostname.toLowerCase();
-    if (
-      host === 'localhost' ||
-      host === '127.0.0.1' ||
-      host === '0.0.0.0' ||
-      host === '::1' ||
-      host.endsWith('.local') ||
-      host.endsWith('.internal') ||
-      /^10\./.test(host) ||
-      /^192\.168\./.test(host) ||
-      /^169\.254\./.test(host) ||
-      /^172\.(1[6-9]|2\d|3[01])\./.test(host)
-    ) {
-      return false;
-    }
-    return true;
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
   } catch {
     return false;
   }
@@ -297,10 +283,20 @@ function resolveBaseUrl(req: Request): string {
   return `${proto === 'https' ? 'https' : 'http'}://${cleanHost}`;
 }
 
-async function sendMetaCapiPurchase(
-  order: OrderRecord,
-  overrideTestCode?: string
-): Promise<{ sent: boolean; detail?: string }> {
+async function sendMetaCapiEvent(params: {
+  eventName: 'InitiateCheckout' | 'Purchase';
+  eventId: string;
+  valueEur: number;
+  contentIds: string[];
+  numItems?: number;
+  customerEmail?: string;
+  phone?: string;
+  clientIp?: string;
+  clientUserAgent?: string;
+  fbc?: string;
+  fbp?: string;
+  overrideTestCode?: string;
+}): Promise<{ sent: boolean; detail?: string }> {
   const token = cleanEnvSecret(process.env.META_CAPI_ACCESS_TOKEN);
   const pixelId = store.pixelConfig.pixelId.trim();
   if (!token || !pixelId || !store.pixelConfig.enabled) {
@@ -313,11 +309,18 @@ async function sendMetaCapiPurchase(
         : 'Pixel deaktiviert',
     };
   }
+  if (params.eventName === 'InitiateCheckout' && !store.pixelConfig.trackInitiateCheckout) {
+    return { sent: false, detail: 'InitiateCheckout deaktiviert' };
+  }
+  if (params.eventName === 'Purchase' && !store.pixelConfig.trackPurchase) {
+    return { sent: false, detail: 'Purchase deaktiviert' };
+  }
 
   const sha256 = (v: string) =>
     crypto.createHash('sha256').update(v.trim().toLowerCase()).digest('hex');
 
-  const testCode = overrideTestCode ?? store.pixelConfig.testEventCode;
+  const testCode = params.overrideTestCode ?? store.pixelConfig.testEventCode;
+  const cleanDigits = params.phone ? params.phone.replace(/[^\d]/g, '') : '';
 
   try {
     const resp = await fetch(
@@ -328,24 +331,25 @@ async function sendMetaCapiPurchase(
         body: JSON.stringify({
           data: [
             {
-              event_name: 'Purchase',
+              event_name: params.eventName,
               event_time: Math.floor(Date.now() / 1000),
               action_source: 'website',
               event_source_url: 'https://mrkshi.com/',
-              event_id: order.id,
+              event_id: params.eventId,
               user_data: {
-                em: order.customerEmail ? [sha256(order.customerEmail)] : undefined,
-                ph: order.whatsappNumber
-                  ? [sha256(order.whatsappNumber.replace(/[^\d]/g, ''))]
-                  : undefined,
-                client_ip_address: order.clientIp || undefined,
-                client_user_agent: order.clientUserAgent || undefined,
+                em: params.customerEmail ? [sha256(params.customerEmail)] : undefined,
+                ph: cleanDigits ? [sha256(cleanDigits)] : undefined,
+                client_ip_address: params.clientIp || undefined,
+                client_user_agent: params.clientUserAgent || undefined,
+                fbc: params.fbc || undefined,
+                fbp: params.fbp || undefined,
               },
               custom_data: {
                 currency: 'EUR',
-                value: Number((order.totalCents / 100).toFixed(2)),
-                content_ids: order.items.map((i) => i.productId),
+                value: Number(params.valueEur.toFixed(2)),
+                content_ids: params.contentIds,
                 content_type: 'product',
+                ...(params.numItems ? { num_items: params.numItems } : {}),
               },
             },
           ],
@@ -355,14 +359,34 @@ async function sendMetaCapiPurchase(
     );
     const bodyText = await resp.text();
     if (!resp.ok) {
-      console.error('[Meta CAPI Error]', resp.status, bodyText);
+      console.error(`[Meta CAPI ${params.eventName} Error]`, resp.status, bodyText);
       return { sent: false, detail: `HTTP ${resp.status}: ${bodyText.slice(0, 180)}` };
     }
     return { sent: true, detail: bodyText.slice(0, 180) };
   } catch (err) {
-    console.error('[Meta CAPI Network Error]', err);
+    console.error(`[Meta CAPI ${params.eventName} Network Error]`, err);
     return { sent: false, detail: err instanceof Error ? err.message : 'Netzwerkfehler' };
   }
+}
+
+async function sendMetaCapiPurchase(
+  order: OrderRecord,
+  overrideTestCode?: string
+): Promise<{ sent: boolean; detail?: string }> {
+  return sendMetaCapiEvent({
+    eventName: 'Purchase',
+    eventId: order.id,
+    valueEur: order.totalCents / 100,
+    contentIds: order.items.map((i) => i.productId),
+    numItems: order.items.reduce((s, i) => s + i.quantity, 0),
+    customerEmail: order.customerEmail,
+    phone: order.whatsappNumber,
+    clientIp: order.clientIp,
+    clientUserAgent: order.clientUserAgent,
+    fbc: order.fbc,
+    fbp: order.fbp,
+    overrideTestCode,
+  });
 }
 
 function enrichOrderFromStripeSession(order: OrderRecord, session: Stripe.Checkout.Session): void {
@@ -399,7 +423,7 @@ async function dispatchOrderNotifications(
   const cleanPhone = order.whatsappNumber.replace(/[^\d]/g, '');
   const waLink = cleanPhone ? `https://wa.me/${cleanPhone}` : '';
 
-  const n8nUrl = (process.env.N8N_WEBHOOK_URL ?? '').trim();
+  const n8nUrl = cleanEnvSecret(process.env.N8N_WEBHOOK_URL);
   if (n8nUrl && isSafeWebhookUrl(n8nUrl)) {
     try {
       const resp = await fetch(n8nUrl, {
@@ -417,6 +441,7 @@ async function dispatchOrderNotifications(
           customerEmail: order.customerEmail,
           whatsappNumber: order.whatsappNumber,
           whatsappLink: waLink,
+          shippingSummary: order.shippingSummary ?? '',
           measurementsSummary: order.measurementsSummary,
           giftNote: order.giftNote,
           items: order.items,
@@ -426,6 +451,9 @@ async function dispatchOrderNotifications(
       });
       if (resp.ok) {
         n8nSent = true;
+      } else {
+        const n8nErr = await resp.text().catch(() => '');
+        console.error('[n8n Webhook Error]', resp.status, n8nErr);
       }
     } catch (err) {
       console.error('n8n webhook failed:', err);
@@ -511,7 +539,11 @@ async function markOrderPaidAndDispatch(order: OrderRecord): Promise<OrderRecord
 
   persistStoreState();
 
-  if (!wasAlreadyPaid || !order.telegramSent) {
+  const hasN8n = Boolean(cleanEnvSecret(process.env.N8N_WEBHOOK_URL));
+  const hasTg = Boolean(
+    cleanEnvSecret(process.env.TELEGRAM_BOT_TOKEN) && cleanEnvSecret(process.env.TELEGRAM_CHAT_ID)
+  );
+  if (!wasAlreadyPaid || (hasN8n && !order.n8nSent) || (hasTg && !order.telegramSent)) {
     await dispatchOrderNotifications(order);
   }
 
@@ -894,8 +926,10 @@ async function startServer() {
       whatsappNumber?: unknown;
       measurementsSummary?: unknown;
       giftNote?: unknown;
-      upsellCareKit?: unknown;
       voucherCode?: unknown;
+      checkoutEventId?: unknown;
+      fbc?: unknown;
+      fbp?: unknown;
     };
 
     if (!Array.isArray(body.items) || body.items.length === 0 || body.items.length > 20) {
@@ -935,6 +969,12 @@ async function startServer() {
       '';
     const clientUserAgent =
       typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'].slice(0, 250) : '';
+    const checkoutEventId =
+      typeof body.checkoutEventId === 'string' && body.checkoutEventId.trim()
+        ? body.checkoutEventId.trim().slice(0, 80)
+        : `ic_${Date.now()}`;
+    const fbc = typeof body.fbc === 'string' ? body.fbc.trim().slice(0, 180) : '';
+    const fbp = typeof body.fbp === 'string' ? body.fbp.trim().slice(0, 120) : '';
 
     const validatedLines: OrderItemRecord[] = [];
     let totalJacketQty = 0;
@@ -1014,6 +1054,21 @@ async function startServer() {
     const orderId = `MRK-${store.orderCounter++}`;
     const stripe = getStripeClient();
     const baseUrl = resolveBaseUrl(req);
+
+    // Fire Server-Side Meta CAPI InitiateCheckout non-blocking (deduplicated with Browser Pixel via checkoutEventId)
+    sendMetaCapiEvent({
+      eventName: 'InitiateCheckout',
+      eventId: checkoutEventId,
+      valueEur: totalCents / 100,
+      contentIds: validatedLines.map((l) => l.productId),
+      numItems: totalJacketQty,
+      customerEmail: customerEmail || undefined,
+      phone: whatsappNumber || undefined,
+      clientIp,
+      clientUserAgent,
+      fbc: fbc || undefined,
+      fbp: fbp || undefined,
+    }).catch(() => {});
 
     if (!stripe) {
       const previewSessionId = `cs_preview_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
@@ -1155,6 +1210,8 @@ async function startServer() {
         inventoryDecremented: false,
         clientIp,
         clientUserAgent,
+        fbc: fbc || undefined,
+        fbp: fbp || undefined,
         createdAt: new Date().toISOString(),
       };
       store.orders.unshift(order);
@@ -1628,7 +1685,7 @@ async function startServer() {
     const imageUrl =
       typeof body.imageUrl === 'string' && body.imageUrl.trim()
         ? body.imageUrl.trim().slice(0, 500)
-        : '/assets/aistudio/CA15DAC8-4245-4F0F-981D-ED38CFB17326_e15622ac.png';
+        : '/assets/aistudio/CA15DAC8-4245-4F0F-981D-ED38CFB17326_e15622ac.webp';
 
     const nextCode = String(store.products.length + 1).padStart(2, '0');
     const newProduct: JacketProduct = {
@@ -1800,7 +1857,14 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distDir = path.resolve(__dirname, 'dist');
-    app.use(express.static(distDir));
+    app.use(
+      '/assets',
+      express.static(path.resolve(distDir, 'assets'), {
+        maxAge: '30d',
+        immutable: true,
+      })
+    );
+    app.use(express.static(distDir, { maxAge: '1h' }));
     app.get('*', (_req: Request, res: Response) => {
       const indexFile = path.resolve(distDir, 'index.html');
       if (fs.existsSync(indexFile)) {

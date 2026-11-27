@@ -36,8 +36,8 @@ export const KHABIBI_COLORS: KhabibiColorVariant[] = [
     cartLabel: 'Bleu Petrol',
     hex: '#46627F',
     backdropHex: '#8FA8BF',
-    frontImage: '/assets/aistudio/CA15DAC8-4245-4F0F-981D-ED38CFB17326_e15622ac.png',
-    modelLookImage: '/assets/aistudio/535414CE-F3D5-49B9-9E69-F7781E2AAD5D_4688a3f4.png',
+    frontImage: '/assets/aistudio/CA15DAC8-4245-4F0F-981D-ED38CFB17326_e15622ac.webp',
+    modelLookImage: '/assets/aistudio/535414CE-F3D5-49B9-9E69-F7781E2AAD5D_4688a3f4.webp',
     dyeNote: 'Tiefes Rauch-Petrol auf geschmeidigem marokkanischem Lammnappa.',
   },
   {
@@ -47,7 +47,7 @@ export const KHABIBI_COLORS: KhabibiColorVariant[] = [
     cartLabel: 'Bordeaux',
     hex: '#57242A',
     backdropHex: '#B8848B',
-    frontImage: '/assets/aistudio/70862DF6-3C79-43FE-8378-92C4BDB2DAF9_283b533a.png',
+    frontImage: '/assets/aistudio/70862DF6-3C79-43FE-8378-92C4BDB2DAF9_283b533a.webp',
     dyeNote: 'Sattes Atelier-Bordeaux — selten im Herrenleder, markant im Winter.',
   },
   {
@@ -57,8 +57,8 @@ export const KHABIBI_COLORS: KhabibiColorVariant[] = [
     cartLabel: 'Olive',
     hex: '#4A5638',
     backdropHex: '#A0AE8C',
-    frontImage: '/assets/aistudio/D6A9DB8F-33FA-4641-9933-CD24B640F274_b098b756.png',
-    modelLookImage: '/assets/aistudio/72CEA19B-6D26-4FB4-802F-B0A22164C154_86b246ad.png',
+    frontImage: '/assets/aistudio/D6A9DB8F-33FA-4641-9933-CD24B640F274_b098b756.webp',
+    modelLookImage: '/assets/aistudio/72CEA19B-6D26-4FB4-802F-B0A22164C154_86b246ad.webp',
     dyeNote: 'Pflanzlich nuanciertes Olivgrün mit naturweißem Shearling-Kragen.',
   },
   {
@@ -68,8 +68,8 @@ export const KHABIBI_COLORS: KhabibiColorVariant[] = [
     cartLabel: 'Espresso',
     hex: '#4A2B1B',
     backdropHex: '#B3917D',
-    frontImage: '/assets/aistudio/768B34DB-23B4-4E9D-A2EB-B903551FBD7E_454ba614.png',
-    modelLookImage: '/assets/aistudio/4AC86B3D-7BAD-432B-9C50-EC148D7DD9BD_b25f0076.png',
+    frontImage: '/assets/aistudio/768B34DB-23B4-4E9D-A2EB-B903551FBD7E_454ba614.webp',
+    modelLookImage: '/assets/aistudio/4AC86B3D-7BAD-432B-9C50-EC148D7DD9BD_b25f0076.webp',
     dyeNote: 'Dunkler Röstton mit feiner Natur-Narbung und Ton-in-Ton Bündchen.',
   },
   {
@@ -79,8 +79,8 @@ export const KHABIBI_COLORS: KhabibiColorVariant[] = [
     cartLabel: 'Black',
     hex: '#1B1C1E',
     backdropHex: '#9FA5AC',
-    frontImage: '/assets/aistudio/6A0BB871-0CE4-4849-8059-672DD772565D_6cd038b3.png',
-    modelLookImage: '/assets/aistudio/48C16E81-9523-46FF-962B-C8AF899880D1_9ebdce3d.png',
+    frontImage: '/assets/aistudio/6A0BB871-0CE4-4849-8059-672DD772565D_6cd038b3.webp',
+    modelLookImage: '/assets/aistudio/48C16E81-9523-46FF-962B-C8AF899880D1_9ebdce3d.webp',
     dyeNote: 'Seidig-mattes Tiefschwarz in vollnarbigem Lammnappa.',
   },
 ];
@@ -89,22 +89,22 @@ export const KHABIBI_DETAIL_SHOTS: GalleryShot[] = [
   {
     id: 'detail-open',
     label: 'Innenfutter',
-    src: '/assets/aistudio/576CBEC6-887A-4A50-8082-308419608474_bc2c4463.png',
+    src: '/assets/aistudio/576CBEC6-887A-4A50-8082-308419608474_bc2c4463.webp',
   },
   {
     id: 'detail-side',
     label: 'Seitenprofil',
-    src: '/assets/aistudio/0028C2A9-E31A-4E2C-A60A-A57339D68D91_acaca684.png',
+    src: '/assets/aistudio/0028C2A9-E31A-4E2C-A60A-A57339D68D91_acaca684.webp',
   },
   {
     id: 'detail-back',
     label: 'Rückenansicht',
-    src: '/assets/aistudio/16ACE6C1-515A-4CED-B427-3F970319CB83_e90db936.png',
+    src: '/assets/aistudio/16ACE6C1-515A-4CED-B427-3F970319CB83_e90db936.webp',
   },
   {
     id: 'detail-macro',
     label: 'Detail-Makro',
-    src: '/assets/aistudio/F9DB9E57-2C83-4E40-AC51-30D031A473B6_f3876e7d.png',
+    src: '/assets/aistudio/F9DB9E57-2C83-4E40-AC51-30D031A473B6_f3876e7d.webp',
   },
 ];
 

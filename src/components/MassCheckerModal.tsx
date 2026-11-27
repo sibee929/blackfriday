@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Check, MessageCircle, Ruler, X } from 'lucide-react';
 
 export interface MassCheckerResult {
@@ -85,7 +86,7 @@ export const MassCheckerModal: React.FC<MassCheckerModalProps> = ({
     };
   }, [heightCm, weightKg, chestCm, sleeveCm, build, fit]);
 
-  if (!open) return null;
+  if (!open || typeof document === 'undefined') return null;
 
   const waMessage = encodeURIComponent(
     `Hallo MRKSHI Team, ich nutze den Maßchecker für ${productName}${colorName ? ` (${colorName})` : ''}: ${computed.summaryString}. Passt EU ${computed.recommendedSize} (${computed.euCode}) oder empfehlt ihr Direkt-Maß?`
@@ -101,7 +102,7 @@ export const MassCheckerModal: React.FC<MassCheckerModalProps> = ({
     summaryString: computed.summaryString,
   });
 
-  return (
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -309,6 +310,7 @@ export const MassCheckerModal: React.FC<MassCheckerModalProps> = ({
           </a>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

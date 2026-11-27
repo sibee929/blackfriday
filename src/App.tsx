@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ShoppingBag } from 'lucide-react';
 import {
-  getAllKhabibiUrls,
   KHABIBI_COLORS,
   preloadGalleryImages,
 } from './data/jackets';
 import { INITIAL_EIGHT_PRODUCTS, JacketProduct } from './data/catalog';
 import {
   DEFAULT_PIXEL_CONFIG,
+  generateMetaEventId,
+  getMetaAttributionParams,
   initAllAnalytics,
   loadLocalPixelConfig,
   MetaPixelConfig,
@@ -51,8 +52,9 @@ export default function App() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [orderConfirmation, setOrderConfirmation] = useState<OrderConfirmationState | null>(null);
 
+  // Only preload the 5 hero front cutouts (not 30+ full-res gallery shots)
   useEffect(() => {
-    preloadGalleryImages(getAllKhabibiUrls());
+    preloadGalleryImages(KHABIBI_COLORS.map((c) => c.frontImage));
   }, []);
 
   // Load authoritative Reverse-Shopify catalog from server
@@ -369,19 +371,30 @@ export default function App() {
         ['TREUE10', 'MRKSHI10', 'BLACKFRIDAY', 'VIP10'].includes(cleanVoucher);
       const effectiveEur = Math.max(1, payload.priceEur - (voucherOk ? 10 : 0));
 
-      trackMetaEvent('InitiateCheckout', {
-        currency: 'EUR',
-        value: effectiveEur,
-        num_items: 1,
-        content_ids: [payload.productId],
-        leather_colors: [payload.colorVariant.name],
-      });
+      const checkoutEventId = generateMetaEventId('ic');
+      const metaAttr = getMetaAttributionParams();
+
+      trackMetaEvent(
+        'InitiateCheckout',
+        {
+          currency: 'EUR',
+          value: effectiveEur,
+          num_items: 1,
+          content_ids: [payload.productId],
+          leather_colors: [payload.colorVariant.name],
+        },
+        undefined,
+        checkoutEventId
+      );
 
       try {
         const res = await fetch('/api/checkout/create-session', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            checkoutEventId,
+            fbc: metaAttr.fbc,
+            fbp: metaAttr.fbp,
             voucherCode: voucherOk ? cleanVoucher : undefined,
             measurementsSummary: payload.customMeasure || undefined,
             items: [
@@ -504,6 +517,17 @@ export default function App() {
           onAddToCart={addConfiguredToCart}
           onDirectFastCheckout={handleDirectFastCheckout}
           onSelectHeroColor={(colorId) => handleSelectColor(colorId, 'gallery')}
+          onViewProduct={(prod, colorName) => {
+            trackMetaEvent('ViewContent', {
+              content_name: prod.name,
+              content_category: prod.leatherType,
+              content_ids: [prod.id],
+              content_type: 'product',
+              leather_color: colorName,
+              currency: 'EUR',
+              value: prod.priceEur,
+            });
+          }}
         />
 
         {/* 4. Trust Strip, DHL Express, 14-Day DE Return & Verified Reviews */}
@@ -538,14 +562,19 @@ export default function App() {
         onUpdateQty={handleUpdateQty}
         onRemoveItem={handleRemoveItem}
         onApplyCartMeasure={handleApplyCartMeasure}
-        onInitiateCheckout={(items, totalEur) => {
-          trackMetaEvent('InitiateCheckout', {
-            currency: 'EUR',
-            value: totalEur,
-            num_items: items.reduce((sum, i) => sum + i.quantity, 0),
-            content_ids: items.map((i) => i.productId),
-            leather_colors: items.map((i) => i.colorVariant.name),
-          });
+        onInitiateCheckout={(items, totalEur, eventId) => {
+          trackMetaEvent(
+            'InitiateCheckout',
+            {
+              currency: 'EUR',
+              value: totalEur,
+              num_items: items.reduce((sum, i) => sum + i.quantity, 0),
+              content_ids: items.map((i) => i.productId),
+              leather_colors: items.map((i) => i.colorVariant.name),
+            },
+            undefined,
+            eventId
+          );
         }}
         onPreviewPurchaseComplete={(sessionId, totalEur, items, meta) => {
           trackMetaEvent(

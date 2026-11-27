@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, Expand, Ruler, ShoppingBag, Sparkles, X } from 'lucide-react';
 import { JacketProduct, optimizeProductImage } from '../data/catalog';
 import { preloadGalleryImages } from '../data/jackets';
@@ -13,6 +14,7 @@ interface CollectionSixSectionProps {
   onAddToCart: (payload: ConfiguredOrderPayload, openDrawer: boolean) => void;
   onDirectFastCheckout?: (payload: ConfiguredOrderPayload) => void;
   onSelectHeroColor?: (colorId: string) => void;
+  onViewProduct?: (product: JacketProduct, colorName: string) => void;
 }
 
 type FilterTab = 'alle' | 'nappa' | 'wildleder' | 'rare';
@@ -25,6 +27,7 @@ export const CollectionSixSection: React.FC<CollectionSixSectionProps> = ({
   onAddToCart,
   onDirectFastCheckout,
   onSelectHeroColor,
+  onViewProduct,
 }) => {
   const [filter, setFilter] = useState<FilterTab>('alle');
   const [selectedColors, setSelectedColors] = useState<Record<string, string>>({});
@@ -49,39 +52,20 @@ export const CollectionSixSection: React.FC<CollectionSixSectionProps> = ({
     }
   }, [externalOpenProductId, products, onClearExternalOpen]);
 
-  // Preload first color image of every jacket for instant gallery rendering
+  // Lock background page scroll while detail modal is open so viewport never shifts
   useEffect(() => {
-    const urls = products
-      .map((p) => optimizeProductImage(p.colors[0]?.image ?? p.gallery[0] ?? '', 640))
-      .filter(Boolean);
-    preloadGalleryImages(urls);
-  }, [products]);
-
-  useEffect(() => {
-    const el = sectionRef.current;
-    if (!el || typeof IntersectionObserver === 'undefined') return;
-    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
-
-    const obs = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            el.animate(
-              [
-                { opacity: 0.78, transform: 'translateY(16px)' },
-                { opacity: 1, transform: 'translateY(0px)' },
-              ],
-              { duration: 460, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'both' }
-            );
-            obs.disconnect();
-          }
-        }
-      },
-      { threshold: 0.06 }
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, []);
+    if (!detailProduct || typeof document === 'undefined') return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDetailProduct(null);
+    };
+    window.addEventListener('keydown', onEsc);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onEsc);
+    };
+  }, [detailProduct]);
 
   const visibleProducts = useMemo(() => {
     const active = products.filter((p) => p.active);
@@ -105,6 +89,9 @@ export const CollectionSixSection: React.FC<CollectionSixSectionProps> = ({
     const targetColor = product.colors.find((c) => c.id === colorId);
     if (targetColor?.image) {
       preloadGalleryImages([optimizeProductImage(targetColor.image, 640)]);
+    }
+    if (targetColor && onViewProduct) {
+      onViewProduct(product, targetColor.name);
     }
     if (product.id === 'khabibi' && onSelectHeroColor) {
       const heroIds = ['bleu-petrol', 'bordeaux', 'olive', 'espresso', 'black'];
@@ -215,8 +202,15 @@ export const CollectionSixSection: React.FC<CollectionSixSectionProps> = ({
                 className="flex flex-col justify-between bg-white border border-black/15 overflow-hidden transition-transform duration-200 hover:-translate-y-0.5 hover:border-black"
               >
                 <div>
-                  {/* Fast-loading White Studio Image */}
-                  <div className="relative aspect-[4/4.4] bg-white border-b border-black/10 overflow-hidden group">
+                  {/* Fast-loading White Studio Image (click anywhere on image to open detail modal) */}
+                  <div
+                    onClick={() => {
+                      setDetailProduct(jacket);
+                      setDetailImageIdx(0);
+                      onViewProduct?.(jacket, activeColor.name);
+                    }}
+                    className="relative aspect-[4/4.4] bg-white border-b border-black/10 overflow-hidden group cursor-pointer"
+                  >
                     {!imgFailed && optimizedSrc ? (
                       <img
                         src={optimizedSrc}
@@ -405,19 +399,21 @@ export const CollectionSixSection: React.FC<CollectionSixSectionProps> = ({
         </div>
       </div>
 
-      {/* Full Original Shop Multi-Angle Gallery Modal (ALL images from CSV) */}
-      {detailProduct && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          onClick={() => setDetailProduct(null)}
-          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4"
-        >
+      {/* Full Multi-Angle Gallery Modal rendered via Portal directly in viewport */}
+      {detailProduct &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            role="dialog"
+            aria-modal="true"
+            onClick={() => setDetailProduct(null)}
+            className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto"
+          >
           <div
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-4xl max-h-[92vh] overflow-y-auto bg-white border-2 border-black shadow-2xl p-5 md:p-7 text-black"
           >
-            <div className="flex items-start justify-between gap-4 pb-4 border-b border-black/15">
+            <div className="sticky top-0 z-10 bg-white flex items-start justify-between gap-4 pb-3 pt-1 border-b border-black/15">
               <div>
                 <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-black/65">
                   {detailProduct.code} · {detailProduct.leatherType} · 100 % NATURLEDER
@@ -634,7 +630,8 @@ export const CollectionSixSection: React.FC<CollectionSixSectionProps> = ({
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       <MassCheckerModal

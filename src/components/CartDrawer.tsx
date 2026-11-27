@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { MassCheckerModal, MassCheckerResult } from './MassCheckerModal';
 import { PaymentLogos } from './PaymentLogos';
+import { generateMetaEventId, getMetaAttributionParams } from '../lib/metaPixel';
 
 export interface CartColorInfo {
   id: string;
@@ -43,7 +44,7 @@ interface CartDrawerProps {
   onUpdateQty: (uid: string, delta: number) => void;
   onRemoveItem: (uid: string) => void;
   onApplyCartMeasure?: (summary: string, recommendedSize: string, useCustom: boolean) => void;
-  onInitiateCheckout: (items: CartItem[], totalEur: number) => void;
+  onInitiateCheckout: (items: CartItem[], totalEur: number, eventId: string) => void;
   onPreviewPurchaseComplete: (
     sessionId: string,
     totalEur: number,
@@ -145,13 +146,18 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     setStripeRedirectUrl(null);
     setPreviewInfo(null);
 
-    onInitiateCheckout(items, finalTotalEur);
+    const checkoutEventId = generateMetaEventId('ic');
+    const metaAttr = getMetaAttributionParams();
+    onInitiateCheckout(items, finalTotalEur, checkoutEventId);
 
     try {
       const res = await fetch('/api/checkout/create-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          checkoutEventId,
+          fbc: metaAttr.fbc,
+          fbp: metaAttr.fbp,
           measurementsSummary: checkoutMeasurement.trim() || undefined,
           giftNote: giftNote.trim() || undefined,
           voucherCode: voucherValid ? cleanApplied : undefined,

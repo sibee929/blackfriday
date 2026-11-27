@@ -45,8 +45,56 @@ declare global {
 
 const STORAGE_KEY = 'mrkshi_meta_pixel_config_v2';
 const CONSENT_STORAGE_KEY = 'mrkshi_cookie_consent_v1';
+const FBC_STORAGE_KEY = 'mrkshi_meta_fbc_v1';
 const eventLogSubscribers = new Set<(entries: PixelEventLogEntry[]) => void>();
 let eventLog: PixelEventLogEntry[] = [];
+let pendingPreConsentEvents: Array<{
+  eventName: PixelEventLogEntry['eventName'];
+  payload: Record<string, unknown>;
+  eventId?: string;
+}> = [];
+
+export function generateMetaEventId(prefix = 'mrk'): string {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function readCookie(name: string): string {
+  if (typeof document === 'undefined') return '';
+  const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+  return match ? decodeURIComponent(match[1]) : '';
+}
+
+export function captureMetaClickParams(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const fbclid = params.get('fbclid')?.trim();
+    if (fbclid) {
+      const fbc = `fb.1.${Date.now()}.${fbclid}`;
+      window.localStorage.setItem(FBC_STORAGE_KEY, fbc);
+    }
+  } catch {
+    // ignore storage restrictions
+  }
+}
+
+export function getMetaAttributionParams(): { fbc?: string; fbp?: string } {
+  if (typeof window === 'undefined') return {};
+  captureMetaClickParams();
+  let fbc = readCookie('_fbc');
+  if (!fbc) {
+    try {
+      fbc = window.localStorage.getItem(FBC_STORAGE_KEY) ?? '';
+    } catch {
+      fbc = '';
+    }
+  }
+  const fbp = readCookie('_fbp');
+  return {
+    ...(fbc ? { fbc } : {}),
+    ...(fbp ? { fbp } : {}),
+  };
+}
 let initializedPixelId: string | null = null;
 let initializedGa4Id: string | null = null;
 let initializedGtmId: string | null = null;
@@ -160,6 +208,7 @@ function injectScriptOnce(id: string, src: string): void {
 
 export function initAllAnalytics(config: MetaPixelConfig, forceAllow = false): void {
   if (typeof window === 'undefined') return;
+  captureMetaClickParams();
   if (!forceAllow && !hasMarketingConsent()) return;
 
   // 1. Meta Pixel
@@ -184,6 +233,14 @@ export function initAllAnalytics(config: MetaPixelConfig, forceAllow = false): v
     window.fbq?.('init', cleanMetaId);
     initializedPixelId = cleanMetaId;
     trackMetaEvent('PageView', { market: 'DE', currency: 'EUR' }, config);
+
+    if (pendingPreConsentEvents.length > 0) {
+      const buffered = [...pendingPreConsentEvents];
+      pendingPreConsentEvents = [];
+      for (const item of buffered) {
+        trackMetaEvent(item.eventName, item.payload, config, item.eventId);
+      }
+    }
   }
 
   // 2. Google Analytics 4
@@ -280,6 +337,11 @@ export function trackMetaEvent(
       window.fbq('track', eventName, enrichedPayload);
     }
     platforms.push('Meta Pixel');
+  } else if (getStoredConsent() === 'unset' && eventName !== 'PageView') {
+    pendingPreConsentEvents = [
+      ...pendingPreConsentEvents.slice(-8),
+      { eventName, payload, eventId },
+    ];
   }
 
   // Forward to GA4 / GTM dataLayer

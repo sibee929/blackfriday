@@ -6,7 +6,7 @@ export interface ColorOption {
 }
 
 export interface JacketProduct {
-  id: string; // matches Shopify CSV handle
+  id: string;
   code: string;
   name: string;
   subtitle: string;
@@ -25,10 +25,6 @@ export interface JacketProduct {
   isHeroFeatured?: boolean;
 }
 
-/**
- * Optimiert Shopify-CDN-Bilder für extrem schnelle Ladezeiten in Produktgalerien,
- * während lokale `/assets/...` Pfade direkt unverändert geladen werden.
- */
 export function optimizeProductImage(src: string, width = 720): string {
   if (!src) return '';
   if (src.startsWith('/assets/')) return src;
@@ -73,75 +69,75 @@ export const INITIAL_EIGHT_PRODUCTS: JacketProduct[] = [
         "id": "bleu-petrol",
         "name": "Bleu Petrol",
         "hex": "#46627F",
-        "image": "/assets/aistudio/CA15DAC8-4245-4F0F-981D-ED38CFB17326_e15622ac.png"
+        "image": "/assets/aistudio/CA15DAC8-4245-4F0F-981D-ED38CFB17326_e15622ac.webp"
       },
       {
         "id": "bordeaux",
         "name": "Bordeaux",
         "hex": "#57242A",
-        "image": "/assets/aistudio/70862DF6-3C79-43FE-8378-92C4BDB2DAF9_283b533a.png"
+        "image": "/assets/aistudio/70862DF6-3C79-43FE-8378-92C4BDB2DAF9_283b533a.webp"
       },
       {
         "id": "olive",
         "name": "Olive",
         "hex": "#4A5638",
-        "image": "/assets/aistudio/D6A9DB8F-33FA-4641-9933-CD24B640F274_b098b756.png"
+        "image": "/assets/aistudio/D6A9DB8F-33FA-4641-9933-CD24B640F274_b098b756.webp"
       },
       {
         "id": "espresso",
         "name": "Espresso",
         "hex": "#4A2B1B",
-        "image": "/assets/aistudio/768B34DB-23B4-4E9D-A2EB-B903551FBD7E_454ba614.png"
+        "image": "/assets/aistudio/768B34DB-23B4-4E9D-A2EB-B903551FBD7E_454ba614.webp"
       },
       {
         "id": "black",
         "name": "Black",
         "hex": "#1B1C1E",
-        "image": "/assets/aistudio/6A0BB871-0CE4-4849-8059-672DD772565D_6cd038b3.png"
+        "image": "/assets/aistudio/6A0BB871-0CE4-4849-8059-672DD772565D_6cd038b3.webp"
       },
       {
         "id": "taupe",
         "name": "Taupe",
         "hex": "#8C7B6E",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/B3220D18-54A8-48D8-A1DA-46DD4091715E.png?v=1792245350"
+        "image": "/assets/catalog/img_6df9d2a9ee68.webp"
       },
       {
         "id": "camel",
         "name": "Camel",
         "hex": "#A87444",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/Braune_Leder-Bomberjacke_mit_Sherpa-Kragen.png?v=1792258370"
+        "image": "/assets/catalog/img_1e27953132ce.webp"
       }
     ],
     "gallery": [
-      "/assets/aistudio/CA15DAC8-4245-4F0F-981D-ED38CFB17326_e15622ac.png",
-      "/assets/aistudio/70862DF6-3C79-43FE-8378-92C4BDB2DAF9_283b533a.png",
-      "/assets/aistudio/D6A9DB8F-33FA-4641-9933-CD24B640F274_b098b756.png",
-      "/assets/aistudio/768B34DB-23B4-4E9D-A2EB-B903551FBD7E_454ba614.png",
-      "/assets/aistudio/6A0BB871-0CE4-4849-8059-672DD772565D_6cd038b3.png",
-      "/assets/aistudio/576CBEC6-887A-4A50-8082-308419608474_bc2c4463.png",
-      "/assets/aistudio/0028C2A9-E31A-4E2C-A60A-A57339D68D91_acaca684.png",
-      "/assets/aistudio/16ACE6C1-515A-4CED-B427-3F970319CB83_e90db936.png",
-      "/assets/aistudio/F9DB9E57-2C83-4E40-AC51-30D031A473B6_f3876e7d.png",
-      "/assets/aistudio/535414CE-F3D5-49B9-9E69-F7781E2AAD5D_4688a3f4.png",
-      "/assets/aistudio/72CEA19B-6D26-4FB4-802F-B0A22164C154_86b246ad.png",
-      "/assets/aistudio/4AC86B3D-7BAD-432B-9C50-EC148D7DD9BD_b25f0076.png",
-      "/assets/aistudio/48C16E81-9523-46FF-962B-C8AF899880D1_9ebdce3d.png",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/B756FCD7-69BE-4461-9161-299C75896CFC.png?v=1793116193",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/03E850BF-61DD-43F2-84A1-4754A2BFCCD9.png?v=1793116193",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/B3220D18-54A8-48D8-A1DA-46DD4091715E.png?v=1792245350",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/65E1824E-D86D-4DC9-AD87-CA1AF438F41C.jpg?v=1764704945",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/5CF73EDF-0AA8-4EC2-B51F-591796B0C003.png?v=1791721907",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/Gemini_Generated_Image_utg7avutg7avutg7.png?v=1765151863",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/Braune_Leder-Bomberjacke_mit_Sherpa-Kragen.png?v=1792258370",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/E4F0ABFB-8267-43CF-97C5-7E995F859965.jpg?v=1765151863",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/14B3B404-B2D9-411E-8543-175F3F57443F.png?v=1791724371",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/37E25C87-9ECC-46AD-8E48-BE63E81B9CB6.jpg?v=1765151863",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/336F4713-1CCE-44E1-B41C-110CEBC910EB.png?v=1791721633",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/FDC31BFC-A2A9-4D06-B27F-600B4AF3F5A0.jpg?v=1765151863",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/54DDDF76-25EB-4C4F-BE8A-15C6056D2E4E.png?v=1791724371",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/686785A1-C9BD-4062-AACE-939795646997.jpg?v=1765151863",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/8F6D7071-662A-428A-9E62-A4AD362C11AD.jpg?v=1765151863",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MRKSHI_AD_KHABIB_05_Olive_Street_Cafe_4x5_c3c29524-88e7-45be-866e-d231c9d05c9e.png?v=1793004847"
+      "/assets/aistudio/CA15DAC8-4245-4F0F-981D-ED38CFB17326_e15622ac.webp",
+      "/assets/aistudio/70862DF6-3C79-43FE-8378-92C4BDB2DAF9_283b533a.webp",
+      "/assets/aistudio/D6A9DB8F-33FA-4641-9933-CD24B640F274_b098b756.webp",
+      "/assets/aistudio/768B34DB-23B4-4E9D-A2EB-B903551FBD7E_454ba614.webp",
+      "/assets/aistudio/6A0BB871-0CE4-4849-8059-672DD772565D_6cd038b3.webp",
+      "/assets/aistudio/576CBEC6-887A-4A50-8082-308419608474_bc2c4463.webp",
+      "/assets/aistudio/0028C2A9-E31A-4E2C-A60A-A57339D68D91_acaca684.webp",
+      "/assets/aistudio/16ACE6C1-515A-4CED-B427-3F970319CB83_e90db936.webp",
+      "/assets/aistudio/F9DB9E57-2C83-4E40-AC51-30D031A473B6_f3876e7d.webp",
+      "/assets/aistudio/535414CE-F3D5-49B9-9E69-F7781E2AAD5D_4688a3f4.webp",
+      "/assets/aistudio/72CEA19B-6D26-4FB4-802F-B0A22164C154_86b246ad.webp",
+      "/assets/aistudio/4AC86B3D-7BAD-432B-9C50-EC148D7DD9BD_b25f0076.webp",
+      "/assets/aistudio/48C16E81-9523-46FF-962B-C8AF899880D1_9ebdce3d.webp",
+      "/assets/catalog/img_139990cf1701.webp",
+      "/assets/catalog/img_ebe4ac385446.webp",
+      "/assets/catalog/img_6df9d2a9ee68.webp",
+      "/assets/catalog/img_c7fd8e91ad70.webp",
+      "/assets/catalog/img_10878b8e90d1.webp",
+      "/assets/catalog/img_b537602f438a.webp",
+      "/assets/catalog/img_1e27953132ce.webp",
+      "/assets/catalog/img_86b09ca87070.webp",
+      "/assets/catalog/img_47a7f04fadba.webp",
+      "/assets/catalog/img_5fa305acb59c.webp",
+      "/assets/catalog/img_c96e452522a2.webp",
+      "/assets/catalog/img_2c97de4009b0.webp",
+      "/assets/catalog/img_70e23845f69d.webp",
+      "/assets/catalog/img_ea0cd61181d7.webp",
+      "/assets/catalog/img_a4a1cf4efd12.webp",
+      "/assets/catalog/img_1825ca2a2def.webp"
     ]
   },
   {
@@ -175,66 +171,55 @@ export const INITIAL_EIGHT_PRODUCTS: JacketProduct[] = [
     ],
     "colors": [
       {
-        "id": "couleur-camel",
-        "name": "Tabak Camel",
-        "hex": "#9C6B3B",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MRKSHITabacLederjackeinleichtaufgehelltemTabakbraun.png?v=1794477862"
-      },
-      {
         "id": "olive",
         "name": "Edles Oliv",
         "hex": "#4B563A",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MRKSHINappa-JackeinedlemOliv.png?v=1794477862"
+        "image": "/assets/catalog/img_3b9bfd2ec68a.webp"
       },
       {
         "id": "marron",
         "name": "Marron Braun",
         "hex": "#5C3422",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MRKSHINappa-JackeinMarron.png?v=1794477862"
+        "image": "/assets/catalog/img_3af0f3d6cadf.webp"
       },
       {
         "id": "navy",
         "name": "Mitternachtsblau",
         "hex": "#1B2A44",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MitternachtsblaueNappa-Lederjacke_Frontansicht.png?v=1794477862"
+        "image": "/assets/catalog/img_324d24896307.webp"
       },
       {
         "id": "noir",
         "name": "Tiefschwarz",
         "hex": "#151515",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/QuiltedLeatherJacketwithMRKSHILabel.png?v=1794477862"
+        "image": "/assets/catalog/img_dcb73c811436.webp"
       },
       {
         "id": "rouge-bordeaux",
         "name": "Bordeaux",
         "hex": "#661A26",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/BordeauxroteMRKSHINappa-Lederjacke.png?v=1794477862"
+        "image": "/assets/catalog/img_b7b83d0e6e4b.webp"
       }
     ],
     "gallery": [
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MRKSHITabacLederjackeinleichtaufgehelltemTabakbraun.png?v=1794477862",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/QuiltedLeatherJacketwithMRKSHILabel.png?v=1794477862",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MRKSHINappa-LederjackeinRuckansicht.png?v=1794477862",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/EspressofarbeneNappa-LederjackeimSeitenprofil.png?v=1794477862",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/OffeneMRKSHINappa-DaunenjackemitBurgunderfutter.png?v=1794477862",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/BordeauxroteMRKSHINappa-Lederjacke.png?v=1794477862",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MRKSHINappa-JackeinedlemOliv.png?v=1794477862",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MitternachtsblaueNappa-Lederjacke_Frontansicht.png?v=1794477862",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MRKSHINappa-JackeinMarron.png?v=1794477862",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/BordeauxroteNappa-LederjackeinRuckansicht-2.png?v=1794477862",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/BordeauxroteNappalederjackeimStudioportrat-1.png?v=1794477862",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/Bordeaux-Nappa-JackeimDreiviertelprofil-3.png?v=1794477863",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MRKSHITabacLederjackeinleichtaufgehelltemTabakbraun-hier-alles-biler-uznd-bleib-excakt-bei-dem.jpg?v=1794477861",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MRKSHINappa-JackeinedlemOliv-mach-ein-bild-von-der-olive-jacke-in-der-hotelreze.jpg?v=1794477861",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MRKSHINappa-JackeinMarron-kannst-du-jetzt-bitte-aber-bilder-in-luxus-restaur.jpg?v=1794477861",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/image_20261112_105535.jpg?v=1794477861",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/Mitternachtsblaue_Nappa-Lederjacke_Frontansicht-kannst-du-jetzt-bitte-aber-bilder-in-luxus-restaur.jpg?v=1794477861",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/image_20261112_105528.jpg?v=1794477861",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/image_20261112_105529.jpg?v=1794477861",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/image_20261112_105343.jpg?v=1794477861",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/image_20261112_105333_1.jpg?v=1794477861",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/image_20261112_105107.jpg?v=1794477861",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MRKSHINappa-JackeinedlemOliv-hier-alles-biler-uznd-bleib-excakt-bei-dem-model.jpg?v=1794477861"
+      "/assets/catalog/img_dcb73c811436.webp",
+      "/assets/catalog/img_b7b83d0e6e4b.webp",
+      "/assets/catalog/img_3b9bfd2ec68a.webp",
+      "/assets/catalog/img_324d24896307.webp",
+      "/assets/catalog/img_3af0f3d6cadf.webp",
+      "/assets/catalog/img_1d6eb231404a.webp",
+      "/assets/catalog/img_e12606ca15f8.webp",
+      "/assets/catalog/img_6c06f9325f75.webp",
+      "/assets/catalog/img_19b152f21ba2.webp",
+      "/assets/catalog/img_94d4dbc2ae57.webp",
+      "/assets/catalog/img_c210ffe78bf6.webp",
+      "/assets/catalog/img_c9ccd4984b3b.webp",
+      "/assets/catalog/img_1dea643fc852.webp",
+      "/assets/catalog/img_30794a3693ca.webp",
+      "/assets/catalog/img_6a802cc3fbed.webp",
+      "/assets/catalog/img_6750fc5de3a5.webp",
+      "/assets/catalog/img_2b6036b4aded.webp",
+      "/assets/catalog/img_dc18be78ab75.webp"
     ]
   },
   {
@@ -269,137 +254,137 @@ export const INITIAL_EIGHT_PRODUCTS: JacketProduct[] = [
         "id": "blue-majorelle",
         "name": "Blue Majorelle",
         "hex": "#1D4ED8",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/CAF30BE0-0A80-45A9-84CC-4358DA8D285C.png?v=1769256871"
+        "image": "/assets/catalog/img_b1a97f7dc6b9.webp"
       },
       {
         "id": "rouge-hermes",
         "name": "Rouge Hermès",
         "hex": "#B8332A",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/veste_en_cuir_veritable_rouge.png?v=1790750006"
+        "image": "/assets/catalog/img_b1b6cfdd7f05.webp"
       },
       {
         "id": "blue-petrol",
         "name": "Blue Petrol",
         "hex": "#365C6E",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/7F1AB622-D8D1-4823-8FC3-5D881EBB5523.png?v=1770229026"
+        "image": "/assets/catalog/img_f12bcfa08f53.webp"
       },
       {
         "id": "olive",
         "name": "Olive",
         "hex": "#4F5C3A",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/Gemini_Generated_Image_8znxm8znxm8znxm8.png?v=1760470507"
+        "image": "/assets/catalog/img_5d511338917a.webp"
       },
       {
         "id": "mint",
         "name": "Mint",
         "hex": "#7FB4A0",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/CEA65E18-C1ED-475F-A3A9-91C4827C193A.png?v=1777031184"
+        "image": "/assets/catalog/img_0460cc4aee61.webp"
       },
       {
         "id": "jaune",
         "name": "Senf-Gelb",
         "hex": "#C68D28",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/FD43D91B-4B33-4CE8-B30D-8EC5E5769300.png?v=1786448779"
+        "image": "/assets/catalog/img_a812cecd34a3.webp"
       },
       {
         "id": "rouge-bordeaux",
         "name": "Bordeaux",
         "hex": "#5D2329",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/68E58008-22D5-4775-81E1-69D23091BA15.png?v=1770315870"
+        "image": "/assets/catalog/img_2375caa071c6.webp"
       },
       {
         "id": "taupe",
         "name": "Taupe",
         "hex": "#928378",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/CFBA8772-0063-4589-B929-8D0E2438E44C.png?v=1792500111"
+        "image": "/assets/catalog/img_307e3d081369.webp"
       },
       {
         "id": "bleu-bebe",
         "name": "Eisblau",
         "hex": "#7EA5C4",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/F2FF0D9C-75E7-4626-8899-9C74852F3671.png?v=1769256872"
+        "image": "/assets/catalog/img_f9801f8e9caf.webp"
       },
       {
         "id": "creme",
         "name": "Crème",
         "hex": "#E2D7C5",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/cuir_homme.png?v=1772371909"
+        "image": "/assets/catalog/img_616ec8ddc1ea.webp"
       },
       {
         "id": "vert-1",
         "name": "Smaragdgrün",
         "hex": "#2F6C50",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/cuir_veste_homme.png?v=1772371955"
+        "image": "/assets/catalog/img_48fc6e3ffadc.webp"
       },
       {
         "id": "vert",
         "name": "Waldgrün",
         "hex": "#264234",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/64339638-BF81-406E-BB0A-06C4F6376BCE.png?v=1769712519"
+        "image": "/assets/catalog/img_227f3225e075.webp"
       },
       {
         "id": "couleur-camel",
         "name": "Camel",
         "hex": "#B47B46",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/6964F208-BB7F-4835-B381-98BA9B718070.png?v=1763575985"
+        "image": "/assets/catalog/img_decb1b4a75cc.webp"
       },
       {
         "id": "navy",
         "name": "Navy",
         "hex": "#1E2C42",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/F9342511-1EE7-48F6-B3CE-B3E875F8FA20.png?v=1763575984"
+        "image": "/assets/catalog/img_ddec2cedb543.webp"
       },
       {
         "id": "marron",
         "name": "Marron",
         "hex": "#573624",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/Gemini_Generated_Image_9w4ak69w4ak69w4a.png?v=1763461466"
+        "image": "/assets/catalog/img_6d6f18268493.webp"
       },
       {
         "id": "noir-1",
         "name": "Schwarz",
         "hex": "#1A1B1E",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/Gemini_Generated_Image_1hoomg1hoomg1hoo_1__imgupscaler.ai_v1_Fast__2K.png?v=1764706646"
+        "image": "/assets/catalog/img_e43ded9c5fcd.webp"
       }
     ],
     "gallery": [
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/CFBA8772-0063-4589-B929-8D0E2438E44C.png?v=1792500111",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/veste_en_cuir_veritable_couleurs_rares.png?v=1790753385",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/Gemini_Generated_Image_1hoomg1hoomg1hoo_1__imgupscaler.ai_v1_Fast__2K.png?v=1764706646",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/blouson_en_cuir_veritable_couleurs_de_luxe.png?v=1790753555",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/FD43D91B-4B33-4CE8-B30D-8EC5E5769300.png?v=1786448779",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/blouson_en_cuir_veritable_vert_clair.png?v=1790753555",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/Gemini_Generated_Image_8znxm8znxm8znxm8.png?v=1760470507",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/veste_en_cuir_veritable_de_luxe_couleurs_rares.png?v=1790753385",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/veste_en_cuir_veritable_rouge.png?v=1790750006",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/blouson_en_cuir_veritable_bleu_style_denim.png?v=1790753385",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/7F1AB622-D8D1-4823-8FC3-5D881EBB5523.png?v=1770229026",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/veste_en_cuir_veritable_des_leaders.png?v=1790753383",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/cuir_veste_homme.png?v=1772371955",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/veste_en_cuir_veritable_rouge_style_unique.png?v=1790753385",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/68E58008-22D5-4775-81E1-69D23091BA15.png?v=1770315870",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/jacket_en_cuir_veritable_marron.png?v=1790753384",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/CAF30BE0-0A80-45A9-84CC-4358DA8D285C.png?v=1769256871",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/jacket_en_cuir_veritable_noir_businessman.png?v=1790753385",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/CEA65E18-C1ED-475F-A3A9-91C4827C193A.png?v=1777031184",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/blouson_en_cuir_veritable_jaune_moutard.png?v=1790753385",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/Gemini_Generated_Image_9w4ak69w4ak69w4a.png?v=1763461466",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/veste_en_cuir_veritable_bleu_majorelle.png?v=1790753385",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/F2FF0D9C-75E7-4626-8899-9C74852F3671.png?v=1769256872",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/veste_en_cuir_veritable_de_luxe_pour_homme.png?v=1790753385",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/6964F208-BB7F-4835-B381-98BA9B718070.png?v=1763575985",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/veste_en_cuir_veritable_jaune_de_luxe.png?v=1790753385",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/cuir_homme.png?v=1772371909",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/veste_en_cuir_veritable_cadeau.png?v=1790753555",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/F9342511-1EE7-48F6-B3CE-B3E875F8FA20.png?v=1763575984",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/64339638-BF81-406E-BB0A-06C4F6376BCE.png?v=1769712519",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/Gemini_Generated_Image_mexi11mexi11mexi.png?v=1763461466",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/7457D7E8-85B9-4638-8DA3-761EBE54879C.png?v=1763575984",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/rn-image_picker_lib_temp_bb5dd745-9454-4faa-9aba-3aded659f20b.png?v=1763461466",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/Gemini_Generated_Image_7l54a67l54a67l54_imgupscaler.ai_v1_Fast__2K.png?v=1763461466",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/Gemini_Generated_Image_crc0x5crc0x5crc0_imgupscaler.ai_v1_Fast__2K.png?v=1763461466",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/Gemini_Generated_Image_dk3ob5dk3ob5dk3o_1__imgupscaler.ai_v1_Fast__2K.png?v=1772372262",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/Gemini_Generated_Image_893k4g893k4g893k.png?v=1760470507"
+      "/assets/catalog/img_307e3d081369.webp",
+      "/assets/catalog/img_99cbb097744b.webp",
+      "/assets/catalog/img_e43ded9c5fcd.webp",
+      "/assets/catalog/img_012015a32e0f.webp",
+      "/assets/catalog/img_a812cecd34a3.webp",
+      "/assets/catalog/img_cd534b156e6f.webp",
+      "/assets/catalog/img_5d511338917a.webp",
+      "/assets/catalog/img_b6af40b7524e.webp",
+      "/assets/catalog/img_b1b6cfdd7f05.webp",
+      "/assets/catalog/img_29eb8013042d.webp",
+      "/assets/catalog/img_f12bcfa08f53.webp",
+      "/assets/catalog/img_3971038b7b6c.webp",
+      "/assets/catalog/img_48fc6e3ffadc.webp",
+      "/assets/catalog/img_c4e5bf2c35f9.webp",
+      "/assets/catalog/img_2375caa071c6.webp",
+      "/assets/catalog/img_83e958a7955d.webp",
+      "/assets/catalog/img_b1a97f7dc6b9.webp",
+      "/assets/catalog/img_ed1b7f1e7ae9.webp",
+      "/assets/catalog/img_0460cc4aee61.webp",
+      "/assets/catalog/img_58b6af412de1.webp",
+      "/assets/catalog/img_6d6f18268493.webp",
+      "/assets/catalog/img_baabca66639b.webp",
+      "/assets/catalog/img_f9801f8e9caf.webp",
+      "/assets/catalog/img_8e382f526540.webp",
+      "/assets/catalog/img_decb1b4a75cc.webp",
+      "/assets/catalog/img_89dce997108e.webp",
+      "/assets/catalog/img_616ec8ddc1ea.webp",
+      "/assets/catalog/img_25fe7788aaad.webp",
+      "/assets/catalog/img_ddec2cedb543.webp",
+      "/assets/catalog/img_227f3225e075.webp",
+      "/assets/catalog/img_3449f33b06bd.webp",
+      "/assets/catalog/img_d9c55bc8c7cc.webp",
+      "/assets/catalog/img_dc0c82cb8b14.webp",
+      "/assets/catalog/img_22d7029b9b48.webp",
+      "/assets/catalog/img_cd50dda4d4a3.webp",
+      "/assets/catalog/img_1a32b5964270.webp",
+      "/assets/catalog/img_781cfcff60cb.webp"
     ]
   },
   {
@@ -433,56 +418,54 @@ export const INITIAL_EIGHT_PRODUCTS: JacketProduct[] = [
         "id": "rouge-bordeaux",
         "name": "Bordeaux",
         "hex": "#5D2329",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/ChatGPT_Image_Feb_11_2026_02_56_47_PM.png?v=1770818355"
+        "image": "/assets/catalog/img_88df69b9f21d.webp"
       },
       {
         "id": "navy",
         "name": "Navy",
         "hex": "#20324A",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/58C910F3-B820-4DBD-921A-B5B18132AFF9.png?v=1770818355"
+        "image": "/assets/catalog/img_0cf455be9a3e.webp"
       },
       {
         "id": "couleur-camel",
         "name": "Camel",
         "hex": "#B37B48",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/A961D1EF-EB0D-440F-B151-74D98D6F786D.png?v=1770818355"
+        "image": "/assets/catalog/img_15cf08bc0636.webp"
       },
       {
         "id": "white",
         "name": "Elfenbein-Weiß",
         "hex": "#EBE8E1",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/65246718-C4EE-404A-AD3B-AE60AAB4E4E2.png?v=1770389359"
+        "image": "/assets/catalog/img_b422ca826098.webp"
       },
       {
         "id": "marron",
         "name": "Kastanie",
         "hex": "#673B23",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/C48C869A-A808-4E76-96CD-051BC2D413A3.jpg?v=1770818355"
+        "image": "/assets/catalog/img_7722e8420e93.webp"
       },
       {
         "id": "noir",
         "name": "Schwarz",
         "hex": "#191A1C",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/B81A82C4-459E-45A8-8981-839CA62C85C1.png?v=1770388239"
+        "image": "/assets/catalog/img_48679cf1a684.webp"
       }
     ],
     "gallery": [
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/65246718-C4EE-404A-AD3B-AE60AAB4E4E2.png?v=1770389359",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/B81A82C4-459E-45A8-8981-839CA62C85C1.png?v=1770388239",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/19F125E9-143E-48AE-94F4-BBB72E6C03D3.png?v=1770388239",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/A961D1EF-EB0D-440F-B151-74D98D6F786D.png?v=1770818355",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/374178ED-2EE2-4F03-BACC-5AA0FD1C35A3.png?v=1770388239",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/58C910F3-B820-4DBD-921A-B5B18132AFF9.png?v=1770818355",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/ChatGPT_Image_Feb_11_2026_02_56_47_PM.png?v=1770818355",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/C48C869A-A808-4E76-96CD-051BC2D413A3.jpg?v=1770818355",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/4365CFF0-5C28-4DD5-B38F-E80CF7B5CC28.png?v=1770818355",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/3C78022A-52F5-4B20-A364-E638510EC9DE.png?v=1770818355",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/98562BA0-328D-43CD-BB17-697B864C2518.png?v=1790861909",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/36A32790-E231-4627-BFB5-3643DCB4ED15.png?v=1790861910",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/B5EF885A-768B-4DDE-AA5B-42874FCBF646.png?v=1790861909",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/10DCD3AD-4874-4103-881A-80E7B303EFE9.png?v=1790861909",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/C23F2C4C-375F-40C3-9AB7-4965E6B58D43.png?v=1790861910",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/B83B4F1F-C8E5-4882-A6B4-D2B9609F9BB6.png?v=1790861909"
+      "/assets/catalog/img_b422ca826098.webp",
+      "/assets/catalog/img_48679cf1a684.webp",
+      "/assets/catalog/img_aee6f5e7baed.webp",
+      "/assets/catalog/img_15cf08bc0636.webp",
+      "/assets/catalog/img_b97fb306afd6.webp",
+      "/assets/catalog/img_0cf455be9a3e.webp",
+      "/assets/catalog/img_88df69b9f21d.webp",
+      "/assets/catalog/img_7722e8420e93.webp",
+      "/assets/catalog/img_385f4a363edc.webp",
+      "/assets/catalog/img_24c2c48b5ced.webp",
+      "/assets/catalog/img_70c57e8d6777.webp",
+      "/assets/catalog/img_0576259789a9.webp",
+      "/assets/catalog/img_74ca3fcde998.webp",
+      "/assets/catalog/img_7293bb2a368a.webp"
     ]
   },
   {
@@ -516,41 +499,39 @@ export const INITIAL_EIGHT_PRODUCTS: JacketProduct[] = [
         "id": "navy",
         "name": "Navy",
         "hex": "#22334D",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/IMG_6734_imgupscaler.ai_v1_Fast__2K.png?v=1760444498"
+        "image": "/assets/catalog/img_61751dcba776.webp"
       },
       {
         "id": "couleur-camel",
         "name": "Camel",
         "hex": "#B87C44",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/IMG_6735_imgupscaler.ai_v1_Fast__2K.png?v=1760445565"
+        "image": "/assets/catalog/img_80d3de9b6637.webp"
       },
       {
         "id": "marron",
         "name": "Marron",
         "hex": "#593722",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/IMG_6736_imgupscaler.ai_v1_Fast__2K.png?v=1760445535"
+        "image": "/assets/catalog/img_e0ff1d617d28.webp"
       },
       {
         "id": "noir",
         "name": "Schwarz",
         "hex": "#18191B",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/IMG_6725_imgupscaler.ai_v1_Fast__2K.png?v=1760444998"
+        "image": "/assets/catalog/img_0f1cfffcf0a1.webp"
       }
     ],
     "gallery": [
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/IMG_6725_imgupscaler.ai_v1_Fast__2K.png?v=1760444998",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/IMG_6727_imgupscaler.ai_v1_Fast__2K.png?v=1760445424",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/IMG_6736_imgupscaler.ai_v1_Fast__2K.png?v=1760445535",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/IMG_6726_imgupscaler.ai_v1_Fast__2K.png?v=1760445452",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/IMG_6735_imgupscaler.ai_v1_Fast__2K.png?v=1760445565",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/IMG_6728_imgupscaler.ai_v1_Fast__2K.png?v=1760444498",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/IMG_6734_imgupscaler.ai_v1_Fast__2K.png?v=1760444498",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/IMG_6738.png?v=1760444498",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/IMG_6737_imgupscaler.ai_v1_Fast__2K.png?v=1760444498",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/IMG_6733_imgupscaler.ai_v1_Fast__2K.png?v=1760445496",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/IMG_6729_imgupscaler.ai_v1_Fast__2K.png?v=1760444498",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/IMG_6730_imgupscaler.ai_v1_Fast__2K.png?v=1760444498",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/Cuirhommemarvis__imgupscaler.ai_v1_Fast__2K.png?v=1760444498"
+      "/assets/catalog/img_0f1cfffcf0a1.webp",
+      "/assets/catalog/img_905602912faa.webp",
+      "/assets/catalog/img_e0ff1d617d28.webp",
+      "/assets/catalog/img_7e9c6bf1b326.webp",
+      "/assets/catalog/img_80d3de9b6637.webp",
+      "/assets/catalog/img_99cbf9b870da.webp",
+      "/assets/catalog/img_61751dcba776.webp",
+      "/assets/catalog/img_aec3b8102b45.webp",
+      "/assets/catalog/img_d0a485076601.webp",
+      "/assets/catalog/img_9f8959b06998.webp",
+      "/assets/catalog/img_7df153febc0b.webp"
     ]
   },
   {
@@ -581,30 +562,18 @@ export const INITIAL_EIGHT_PRODUCTS: JacketProduct[] = [
     ],
     "colors": [
       {
-        "id": "marron",
-        "name": "Röst-Braun",
-        "hex": "#5A3420",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/veste-cuir-nappa-marron-homme-mrkshi-col-fourrure.webp_4b5f183c-2a81-4fda-9e15-80593646664d.jpg?v=1794765363"
-      },
-      {
         "id": "noir-1",
         "name": "Tiefschwarz",
         "hex": "#191A1C",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/veste-cuir-nappa-noir-homme-mrkshi-col-fourrure.webp_7cc40a11-0585-4989-8d42-3160143b2782.png?v=1794765313"
+        "image": "/assets/catalog/img_d771662a8d23.webp"
       }
     ],
     "gallery": [
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/veste-cuir-nappa-marron-homme-mrkshi-col-fourrure.webp_4b5f183c-2a81-4fda-9e15-80593646664d.jpg?v=1794765363",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/Veste_en_cuir_Nappa_noir_pour_homme_MRKSHI_col_en_fourrure_marron_zipp_e_et_poches_rabat_vue_de_face..png?v=1794765518",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/veste-cuir-nappa-noir-homme-mrkshi-col-fourrure.webp_7cc40a11-0585-4989-8d42-3160143b2782.png?v=1794765313",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/Veste_en_cuir_Nappa_marron_aviator.png?v=1794765559",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/Veste_en_cuir_Nappa_noir_pour_homme_MRKSHI_col_en_fourrure_noire_fermeture_zipp_e_et_poches_rabat_vue_de_face..png?v=1794765385",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/Veste_en_cuir_Nappa_noir.png?v=1794765408",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/Veste_en_cuir_Nappa_noir_pour_homme_MRKSHI_col_en_fourrure_noire_fermeture_et_poches_rabat_vue_de_face..png?v=1794765428",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/Veste_en_cuir_Nappa_noir_pour_homme_MRKSHI_col_en_fourrure_vue_de_face..png?v=1794765447",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/Veste_en_cuir_Nappa_noir_pour_homme_MRKSHI_col_en_noire_fermeture_zipp_e_et_poches_rabat_vue_de_face..png?v=1794765464",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/63DC932D-C5D0-4506-8C53-990C41B2AC53.png?v=1794765218",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/E919441D-CBE2-43B4-825A-E7153ADCD0D4.png?v=1794765219"
+      "/assets/catalog/img_b77d03c0fb70.webp",
+      "/assets/catalog/img_d771662a8d23.webp",
+      "/assets/catalog/img_017a85162d7b.webp",
+      "/assets/catalog/img_023d03f211b4.webp",
+      "/assets/catalog/img_d84b4c3aa389.webp"
     ]
   },
   {
@@ -639,17 +608,12 @@ export const INITIAL_EIGHT_PRODUCTS: JacketProduct[] = [
         "id": "dusty-anthrazit",
         "name": "Dusty Anthrazit",
         "hex": "#464341",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/image_96185164-c227-48de-a10b-eabbf0bddc8a.png?v=1762623151"
+        "image": "/assets/catalog/img_5701faa248fc.webp"
       }
     ],
     "gallery": [
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/image_96185164-c227-48de-a10b-eabbf0bddc8a.png?v=1762623151",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/8A24B291-81A0-468A-9274-AD46B7B49DC3.png?v=1762624514",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/unnamed_11.jpg?v=1762624451",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/Gemini_Generated_Image_rhki7arhki7arhki_1.png?v=1762624451",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/ChatGPT_Image_8._Nov._2025_18_08_00.png?v=1762624451",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/ChatGPT_Image_8._Nov._2025_18_18_24.png?v=1762624451",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/Gemini_Generated_Image_ggvm1cggvm1cggvm.png?v=1762624451"
+      "/assets/catalog/img_5701faa248fc.webp",
+      "/assets/catalog/img_524fc7b22782.webp"
     ]
   },
   {
@@ -684,14 +648,13 @@ export const INITIAL_EIGHT_PRODUCTS: JacketProduct[] = [
         "id": "dusty-grau",
         "name": "Dusty Schwarz-Grau",
         "hex": "#313336",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/ChatGPT_Image_Dec_2_2025_05_53_27_PM.png?v=1764703102"
+        "image": "/assets/catalog/img_db20748519c5.webp"
       }
     ],
     "gallery": [
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/ChatGPT_Image_Dec_2_2025_05_53_27_PM.png?v=1764703102",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/Gemini_Generated_Image_ms2iqgms2iqgms2i.png?v=1764695375",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/Gemini_Generated_Image_89rz4h89rz4h89rz.png?v=1764695375",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/Veste_en_cuir_homme_effet_Dusty.png?v=1764695261"
+      "/assets/catalog/img_db20748519c5.webp",
+      "/assets/catalog/img_9072c91411c9.webp",
+      "/assets/catalog/img_e097a754b8e6.webp"
     ]
   },
   {
@@ -726,14 +689,11 @@ export const INITIAL_EIGHT_PRODUCTS: JacketProduct[] = [
         "id": "wildleder-marine",
         "name": "Wildleder Schiefer",
         "hex": "#465463",
-        "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/016F486C-D799-46E1-99A3-3DDCC89F8F39.jpg?v=1764701144"
+        "image": "/assets/catalog/img_9933d137d62d.webp"
       }
     ],
     "gallery": [
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/016F486C-D799-46E1-99A3-3DDCC89F8F39.jpg?v=1764701144",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/02FEF89A-0B2A-4F81-AD19-EFC0B6EDE775.jpg?v=1764700489",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/1BE7E55C-0C2C-4D8E-BCE7-E36F33B2FB84.webp?v=1764700489",
-      "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/F70D3D2E-4142-43B2-B77F-F4E7B439A459.webp?v=1764700489"
+      "/assets/catalog/img_9933d137d62d.webp"
     ]
   }
 ];
