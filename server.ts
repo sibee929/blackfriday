@@ -1030,13 +1030,16 @@ async function startServer() {
       { loc: 'https://www.mrkshi.com/widerruf', priority: '0.5', changefreq: 'monthly' },
     ];
 
+    const toAbsUrl = (u: string) =>
+      !u ? '' : u.startsWith('http') ? u : `https://www.mrkshi.com${u.startsWith('/') ? '' : '/'}${u}`;
+
     const productUrls = store.products
       .filter((p) => p.active)
       .map((p) => ({
         loc: `https://www.mrkshi.com/products/${encodeURIComponent(p.id)}`,
         priority: '0.9',
         changefreq: 'daily',
-        image: p.colors[0]?.image ?? '',
+        image: toAbsUrl(p.colors[0]?.image ?? ''),
         title: `${p.name} — ${p.leatherType}`,
       }));
 
@@ -1061,6 +1064,77 @@ async function startServer() {
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">',
         ...entries,
         '</urlset>',
+      ].join('\n')
+    );
+  });
+
+  // Live Google Merchant Center (Free Shopping) & Meta Catalog Feed (Advantage+ Dynamic Ads)
+  app.get('/products-feed.xml', (_req: Request, res: Response) => {
+    const xmlEsc = (s: string) =>
+      String(s ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    const toAbsUrl = (u: string) =>
+      !u ? '' : u.startsWith('http') ? u : `https://www.mrkshi.com${u.startsWith('/') ? '' : '/'}${u}`;
+
+    const itemsXml: string[] = [];
+    for (const p of store.products.filter((x) => x.active)) {
+      const leadColor = p.colors[0];
+      const imgUrl = toAbsUrl(leadColor?.image ?? p.gallery[0] ?? '');
+      const extraImgs = p.gallery
+        .map(toAbsUrl)
+        .filter((u) => u && u !== imgUrl)
+        .slice(0, 6);
+      const avail = p.stockTotal > 0 ? 'in stock' : 'out of stock';
+      const regularPrice = `${Math.max(p.compareAtEur, p.priceEur).toFixed(2)} EUR`;
+      const salePrice = `${p.priceEur.toFixed(2)} EUR`;
+
+      // Primary item matching Meta Pixel content_ids = p.id
+      itemsXml.push(
+        [
+          '    <item>',
+          `      <g:id>${xmlEsc(p.id)}</g:id>`,
+          `      <g:item_group_id>${xmlEsc(p.id)}</g:item_group_id>`,
+          `      <g:title>${xmlEsc(`${p.name} — ${leadColor?.name ?? 'Naturleder'} (100 % Echtleder)`)}</g:title>`,
+          `      <g:description>${xmlEsc(`${p.tagline} ${p.description}`)}</g:description>`,
+          `      <g:link>${xmlEsc(`https://www.mrkshi.com/products/${encodeURIComponent(p.id)}`)}</g:link>`,
+          `      <g:image_link>${xmlEsc(imgUrl)}</g:image_link>`,
+          ...extraImgs.map(
+            (x) => `      <g:additional_image_link>${xmlEsc(x)}</g:additional_image_link>`
+          ),
+          `      <g:availability>${avail}</g:availability>`,
+          `      <g:condition>new</g:condition>`,
+          `      <g:price>${regularPrice}</g:price>`,
+          `      <g:sale_price>${salePrice}</g:sale_price>`,
+          `      <g:brand>MRKSHI</g:brand>`,
+          `      <g:google_product_category>Apparel &amp; Accessories &gt; Clothing &gt; Outerwear &gt; Coats &amp; Jackets</g:google_product_category>`,
+          `      <g:gender>male</g:gender>`,
+          `      <g:age_group>adult</g:age_group>`,
+          `      <g:material>${xmlEsc(p.leatherType)}</g:material>`,
+          `      <g:color>${xmlEsc(leadColor?.name ?? 'Schwarz')}</g:color>`,
+          '      <g:shipping>',
+          '        <g:country>DE</g:country>',
+          '        <g:service>DHL Express</g:service>',
+          '        <g:price>0.00 EUR</g:price>',
+          '      </g:shipping>',
+          '    </item>',
+        ].join('\n')
+      );
+    }
+
+    res.type('application/xml; charset=utf-8').send(
+      [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">',
+        '  <channel>',
+        '    <title>MRKSHI — Marokkanische Herren-Lederjacken</title>',
+        '    <link>https://www.mrkshi.com/</link>',
+        '    <description>100 % echtes Naturleder direkt ab Atelier Marokko</description>',
+        ...itemsXml,
+        '  </channel>',
+        '</rss>',
       ].join('\n')
     );
   });
