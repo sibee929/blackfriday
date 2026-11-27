@@ -161,28 +161,6 @@ export const PaymentLogos: React.FC<PaymentLogosProps> = ({
             </text>
           </svg>
         </span>
-
-        {/* SEPA */}
-        <span
-          title="SEPA Lastschrift"
-          aria-label="SEPA"
-          className={`${h} inline-flex items-center justify-center px-2 rounded-[5px] bg-white border border-[#D4D4D8] shadow-2xs`}
-        >
-          <svg viewBox="0 0 46 20" className="h-[12px] w-auto" aria-hidden="true">
-            <text
-              x="23"
-              y="14.5"
-              textAnchor="middle"
-              fontFamily="Arial, Helvetica, sans-serif"
-              fontSize="12.5"
-              fontWeight="800"
-              letterSpacing="0.8"
-              fill="#1E3A8A"
-            >
-              SEPA
-            </text>
-          </svg>
-        </span>
       </div>
 
       {showSecurityNote && (

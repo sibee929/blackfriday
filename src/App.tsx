@@ -83,12 +83,15 @@ export default function App() {
   useEffect(() => {
     let active = true;
     const local = loadLocalPixelConfig();
-    initAllAnalytics(local);
 
     fetch('/api/pixel-config')
       .then((res) => (res.ok ? res.json() : null))
       .then((serverConfig: MetaPixelConfig | null) => {
-        if (!active || !serverConfig) return;
+        if (!active) return;
+        if (!serverConfig) {
+          initAllAnalytics(local);
+          return;
+        }
         const merged: MetaPixelConfig = {
           ...local,
           ...serverConfig,
@@ -102,7 +105,9 @@ export default function App() {
         saveLocalPixelConfig(merged);
         initAllAnalytics(merged);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (active) initAllAnalytics(local);
+      });
 
     return () => {
       active = false;
@@ -114,18 +119,27 @@ export default function App() {
     const checkoutState = params.get('checkout');
     const sessionId = params.get('session_id');
     if (checkoutState === 'success' && sessionId) {
-      fetch(`/api/checkout/session-status?session_id=${encodeURIComponent(sessionId)}`)
-        .then((res) => (res.ok ? res.json() : null))
+      Promise.all([
+        fetch(`/api/checkout/session-status?session_id=${encodeURIComponent(sessionId)}`).then(
+          (res) => (res.ok ? res.json() : null)
+        ),
+        fetch('/api/pixel-config')
+          .then((res) => (res.ok ? res.json() : null))
+          .catch(() => null),
+      ])
         .then(
-          (
-            data: {
+          ([data, latestPixel]: [
+            {
               amountTotalCents?: number;
               mode?: 'stripe' | 'preview';
               orderId?: string;
+              contentIds?: string[];
+              numItems?: number;
               n8nSent?: boolean;
               telegramSent?: boolean;
-            } | null
-          ) => {
+            } | null,
+            MetaPixelConfig | null,
+          ]) => {
             const totalEur = data?.amountTotalCents ? data.amountTotalCents / 100 : 177;
             setOrderConfirmation({
               sessionId,
@@ -136,15 +150,22 @@ export default function App() {
               telegramSent: data?.telegramSent,
             });
             setCartItems([]);
+            if (latestPixel?.pixelId) {
+              initAllAnalytics(latestPixel);
+            }
             trackMetaEvent(
               'Purchase',
               {
                 currency: 'EUR',
                 value: totalEur,
                 content_type: 'product',
-                content_ids: ['khabibi'],
+                content_ids:
+                  Array.isArray(data?.contentIds) && data.contentIds.length > 0
+                    ? data.contentIds
+                    : ['khabibi'],
+                num_items: data?.numItems ?? 1,
               },
-              undefined,
+              latestPixel ?? undefined,
               data?.orderId ?? sessionId
             );
           }

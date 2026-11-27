@@ -66,6 +66,7 @@ interface AdminIntegrationsStatus {
   n8nConfigured: boolean;
   telegramConfigured: boolean;
   capiConfigured: boolean;
+  pixelId?: string;
   domain: string;
 }
 
@@ -1055,9 +1056,9 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
                       },
                       {
                         label: 'Meta Pixel & CAPI',
-                        active: true,
-                        hint: `Pixel 1027857760085345 · CAPI: ${
-                          adminState.integrations.capiConfigured ? 'Aktiv' : 'Optional'
+                        active: Boolean(adminState.integrations.pixelId),
+                        hint: `Pixel ${adminState.integrations.pixelId || 'fehlt'} · CAPI: ${
+                          adminState.integrations.capiConfigured ? 'Aktiv' : 'Fehlt'
                         }`,
                       },
                       {

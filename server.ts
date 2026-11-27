@@ -53,6 +53,7 @@ interface OrderRecord {
   items: OrderItemRecord[];
   n8nSent: boolean;
   telegramSent: boolean;
+  capiSent?: boolean;
   inventoryDecremented: boolean;
   shippingSummary?: string;
   clientIp?: string;
@@ -88,8 +89,16 @@ interface StoreState {
   orderCounter: number;
 }
 
-const DEFAULT_META_PIXEL_ID = '1027857760085345';
-const initialPixelId = (process.env.META_PIXEL_ID ?? DEFAULT_META_PIXEL_ID).trim();
+function cleanEnvSecret(val: string | undefined): string {
+  const trimmed = (val ?? '').trim();
+  if (!trimmed || trimmed.includes('HIER_EINTRAGEN') || trimmed === 'MY_GEMINI_API_KEY') {
+    return '';
+  }
+  return trimmed;
+}
+
+const LEGACY_TEMPLATE_PIXEL_ID = '1027857760085345';
+const initialPixelId = cleanEnvSecret(process.env.META_PIXEL_ID);
 const initialGa4 = (process.env.GA4_MEASUREMENT_ID ?? '').trim();
 const initialGtm = (process.env.GTM_ID ?? '').trim();
 const initialTiktok = (process.env.TIKTOK_PIXEL_ID ?? '').trim();
@@ -102,7 +111,7 @@ function createDefaultState(): StoreState {
     newsletter: [],
     oneEuroTestProductId: null,
     pixelConfig: {
-      pixelId: /^\d{10,20}$/.test(initialPixelId) ? initialPixelId : DEFAULT_META_PIXEL_ID,
+      pixelId: /^\d{10,20}$/.test(initialPixelId) ? initialPixelId : '',
       enabled: true,
       testEventCode: '',
       trackViewContent: true,
@@ -154,15 +163,14 @@ function loadStoreState(): StoreState {
     const mergedProducts = [...mergedDefaults, ...customProducts];
 
     const savedPixel = parsed.pixelConfig ?? ({} as Partial<PixelConfigState>);
-    const envPixel = (process.env.META_PIXEL_ID ?? '').trim();
+    const envPixel = cleanEnvSecret(process.env.META_PIXEL_ID);
     const hasCustomEnvPixel = /^\d{10,20}$/.test(envPixel);
     const savedId = typeof savedPixel.pixelId === 'string' ? savedPixel.pixelId.trim() : '';
-    const resolvedPixelId =
-      hasCustomEnvPixel && (!savedId || savedId === DEFAULT_META_PIXEL_ID)
-        ? envPixel
-        : /^\d{10,20}$/.test(savedId)
-        ? savedId
-        : defaults.pixelConfig.pixelId;
+    const resolvedPixelId = hasCustomEnvPixel
+      ? envPixel
+      : /^\d{10,20}$/.test(savedId) && savedId !== LEGACY_TEMPLATE_PIXEL_ID
+      ? savedId
+      : defaults.pixelConfig.pixelId;
 
     return {
       products: mergedProducts,
@@ -289,16 +297,30 @@ function resolveBaseUrl(req: Request): string {
   return `${proto === 'https' ? 'https' : 'http'}://${cleanHost}`;
 }
 
-async function sendMetaCapiPurchase(order: OrderRecord): Promise<void> {
-  const token = (process.env.META_CAPI_ACCESS_TOKEN ?? '').trim();
+async function sendMetaCapiPurchase(
+  order: OrderRecord,
+  overrideTestCode?: string
+): Promise<{ sent: boolean; detail?: string }> {
+  const token = cleanEnvSecret(process.env.META_CAPI_ACCESS_TOKEN);
   const pixelId = store.pixelConfig.pixelId.trim();
-  if (!token || !pixelId || !store.pixelConfig.enabled) return;
+  if (!token || !pixelId || !store.pixelConfig.enabled) {
+    return {
+      sent: false,
+      detail: !pixelId
+        ? 'META_PIXEL_ID fehlt'
+        : !token
+        ? 'META_CAPI_ACCESS_TOKEN fehlt'
+        : 'Pixel deaktiviert',
+    };
+  }
 
   const sha256 = (v: string) =>
     crypto.createHash('sha256').update(v.trim().toLowerCase()).digest('hex');
 
+  const testCode = overrideTestCode ?? store.pixelConfig.testEventCode;
+
   try {
-    await fetch(
+    const resp = await fetch(
       `https://graph.facebook.com/v20.0/${encodeURIComponent(pixelId)}/events?access_token=${encodeURIComponent(token)}`,
       {
         method: 'POST',
@@ -327,14 +349,19 @@ async function sendMetaCapiPurchase(order: OrderRecord): Promise<void> {
               },
             },
           ],
-          ...(store.pixelConfig.testEventCode
-            ? { test_event_code: store.pixelConfig.testEventCode }
-            : {}),
+          ...(testCode ? { test_event_code: testCode } : {}),
         }),
       }
     );
-  } catch {
-    // non-fatal analytics failure
+    const bodyText = await resp.text();
+    if (!resp.ok) {
+      console.error('[Meta CAPI Error]', resp.status, bodyText);
+      return { sent: false, detail: `HTTP ${resp.status}: ${bodyText.slice(0, 180)}` };
+    }
+    return { sent: true, detail: bodyText.slice(0, 180) };
+  } catch (err) {
+    console.error('[Meta CAPI Network Error]', err);
+    return { sent: false, detail: err instanceof Error ? err.message : 'Netzwerkfehler' };
   }
 }
 
@@ -405,8 +432,8 @@ async function dispatchOrderNotifications(
     }
   }
 
-  const tgToken = (process.env.TELEGRAM_BOT_TOKEN ?? '').trim();
-  const tgChatId = (process.env.TELEGRAM_CHAT_ID ?? '').trim();
+  const tgToken = cleanEnvSecret(process.env.TELEGRAM_BOT_TOKEN);
+  const tgChatId = cleanEnvSecret(process.env.TELEGRAM_CHAT_ID);
   if (tgToken && tgChatId) {
     const linesText = order.items
       .map(
@@ -449,6 +476,9 @@ async function dispatchOrderNotifications(
       );
       if (tgResp.ok) {
         telegramSent = true;
+      } else {
+        const tgErr = await tgResp.text().catch(() => '');
+        console.error('[Telegram Error]', tgResp.status, tgErr);
       }
     } catch (err) {
       console.error('Telegram alert failed:', err);
@@ -481,9 +511,16 @@ async function markOrderPaidAndDispatch(order: OrderRecord): Promise<OrderRecord
 
   persistStoreState();
 
-  if (!wasAlreadyPaid || !order.n8nSent || !order.telegramSent) {
+  if (!wasAlreadyPaid || !order.telegramSent) {
     await dispatchOrderNotifications(order);
-    await sendMetaCapiPurchase(order);
+  }
+
+  if (!order.capiSent) {
+    const capiRes = await sendMetaCapiPurchase(order);
+    if (capiRes.sent) {
+      order.capiSent = true;
+      persistStoreState();
+    }
   }
 
   return order;
@@ -660,12 +697,15 @@ async function startServer() {
       ok: true,
       domain: 'www.mrkshi.com',
       productsCount: store.products.length,
-      stripeConfigured: Boolean((process.env.STRIPE_SECRET_KEY ?? '').trim()),
+      stripeConfigured: Boolean(cleanEnvSecret(process.env.STRIPE_SECRET_KEY)),
+      stripeWebhookConfigured: Boolean(cleanEnvSecret(process.env.STRIPE_WEBHOOK_SECRET)),
+      metaPixelId: store.pixelConfig.pixelId || null,
+      metaCapiConfigured: Boolean(cleanEnvSecret(process.env.META_CAPI_ACCESS_TOKEN)),
       oneEuroTestProductId: store.oneEuroTestProductId,
-      n8nConfigured: Boolean((process.env.N8N_WEBHOOK_URL ?? '').trim()),
+      n8nConfigured: Boolean(cleanEnvSecret(process.env.N8N_WEBHOOK_URL)),
       telegramConfigured: Boolean(
-        (process.env.TELEGRAM_BOT_TOKEN ?? '').trim() &&
-          (process.env.TELEGRAM_CHAT_ID ?? '').trim()
+        cleanEnvSecret(process.env.TELEGRAM_BOT_TOKEN) &&
+          cleanEnvSecret(process.env.TELEGRAM_CHAT_ID)
       ),
     });
   });
@@ -684,7 +724,7 @@ async function startServer() {
   app.get('/api/pixel-config', (_req: Request, res: Response) => {
     res.json({
       ...store.pixelConfig,
-      capiConfigured: Boolean((process.env.META_CAPI_ACCESS_TOKEN ?? '').trim()),
+      capiConfigured: Boolean(cleanEnvSecret(process.env.META_CAPI_ACCESS_TOKEN)),
     });
   });
 
@@ -731,7 +771,7 @@ async function startServer() {
 
     res.json({
       ...store.pixelConfig,
-      capiConfigured: Boolean((process.env.META_CAPI_ACCESS_TOKEN ?? '').trim()),
+      capiConfigured: Boolean(cleanEnvSecret(process.env.META_CAPI_ACCESS_TOKEN)),
     });
   });
 
@@ -1203,8 +1243,11 @@ async function startServer() {
         currency: session.currency ?? 'eur',
         customerEmail: session.customer_details?.email ?? null,
         orderId: existingOrder?.id,
+        contentIds: existingOrder?.items.map((i) => i.productId) ?? ['khabibi'],
+        numItems: existingOrder?.items.reduce((s, i) => s + i.quantity, 0) ?? 1,
         n8nSent: existingOrder?.n8nSent ?? false,
         telegramSent: existingOrder?.telegramSent ?? false,
+        capiSent: existingOrder?.capiSent ?? false,
         mode: 'stripe',
       });
     } catch {
@@ -1363,14 +1406,14 @@ async function startServer() {
 
   // --- Reverse-Shopify Admin Auth & Management API ---
   app.get('/api/admin/auth-status', (_req: Request, res: Response) => {
-    const hasEnv = Boolean((process.env.ADMIN_PASSCODE ?? '').trim());
+    const hasEnv = Boolean(cleanEnvSecret(process.env.ADMIN_PASSCODE));
     res.json({
       initialized: hasEnv || Boolean(store.adminPasswordHash),
     });
   });
 
   app.post('/api/admin/bootstrap', (req: Request, res: Response) => {
-    const hasEnv = Boolean((process.env.ADMIN_PASSCODE ?? '').trim());
+    const hasEnv = Boolean(cleanEnvSecret(process.env.ADMIN_PASSCODE));
     if (hasEnv || store.adminPasswordHash) {
       res.status(403).json({ error: 'Admin-Passwort wurde bereits eingerichtet.' });
       return;
@@ -1390,7 +1433,7 @@ async function startServer() {
   app.post('/api/admin/login', (req: Request, res: Response) => {
     const body = req.body as { passcode?: unknown };
     const passcode = typeof body.passcode === 'string' ? body.passcode.trim() : '';
-    const envPass = (process.env.ADMIN_PASSCODE ?? '').trim();
+    const envPass = cleanEnvSecret(process.env.ADMIN_PASSCODE);
 
     let ok = false;
     if (envPass && verifyPlainSecret(passcode, envPass)) {
@@ -1408,7 +1451,7 @@ async function startServer() {
   });
 
   app.get('/api/admin/state', requireAdminAuth, (_req: Request, res: Response) => {
-    const sk = (process.env.STRIPE_SECRET_KEY ?? '').trim();
+    const sk = cleanEnvSecret(process.env.STRIPE_SECRET_KEY);
     const stripeMode = sk.startsWith('sk_live_')
       ? 'live'
       : sk.startsWith('sk_test_')
@@ -1423,13 +1466,14 @@ async function startServer() {
       integrations: {
         stripeConfigured: Boolean(sk),
         stripeMode,
-        stripeWebhookConfigured: Boolean((process.env.STRIPE_WEBHOOK_SECRET ?? '').trim()),
-        n8nConfigured: Boolean((process.env.N8N_WEBHOOK_URL ?? '').trim()),
+        stripeWebhookConfigured: Boolean(cleanEnvSecret(process.env.STRIPE_WEBHOOK_SECRET)),
+        n8nConfigured: Boolean(cleanEnvSecret(process.env.N8N_WEBHOOK_URL)),
         telegramConfigured: Boolean(
-          (process.env.TELEGRAM_BOT_TOKEN ?? '').trim() &&
-            (process.env.TELEGRAM_CHAT_ID ?? '').trim()
+          cleanEnvSecret(process.env.TELEGRAM_BOT_TOKEN) &&
+            cleanEnvSecret(process.env.TELEGRAM_CHAT_ID)
         ),
-        capiConfigured: Boolean((process.env.META_CAPI_ACCESS_TOKEN ?? '').trim()),
+        capiConfigured: Boolean(cleanEnvSecret(process.env.META_CAPI_ACCESS_TOKEN)),
+        pixelId: store.pixelConfig.pixelId || '',
         domain: 'www.mrkshi.com',
       },
     });
@@ -1685,11 +1729,14 @@ async function startServer() {
     };
 
     const result = await dispatchOrderNotifications(mockOrder);
+    const capiTest = await sendMetaCapiPurchase(mockOrder);
     res.json({
       ...result,
-      message: `Test abgeschlossen — n8n: ${
-        result.n8nSent ? 'Gesendet' : 'Secret fehlt/Fehler'
-      }, Telegram: ${result.telegramSent ? 'Gesendet' : 'Secret fehlt/Fehler'}.`,
+      capiSent: capiTest.sent,
+      capiDetail: capiTest.detail,
+      message: `Telegram: ${result.telegramSent ? '✅ Gesendet' : '❌ Fehlt/Fehler'} · Meta CAPI: ${
+        capiTest.sent ? '✅ Events empfangen' : `❌ ${capiTest.detail ?? 'Fehler'}`
+      } · n8n: ${result.n8nSent ? '✅ Gesendet' : 'Optional'}`,
     });
   });
 

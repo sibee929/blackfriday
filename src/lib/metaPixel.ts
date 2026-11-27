@@ -43,7 +43,7 @@ declare global {
   }
 }
 
-const STORAGE_KEY = 'mrkshi_meta_pixel_config_v1';
+const STORAGE_KEY = 'mrkshi_meta_pixel_config_v2';
 const CONSENT_STORAGE_KEY = 'mrkshi_cookie_consent_v1';
 const eventLogSubscribers = new Set<(entries: PixelEventLogEntry[]) => void>();
 let eventLog: PixelEventLogEntry[] = [];
@@ -79,7 +79,7 @@ export function hasMarketingConsent(): boolean {
 }
 
 export const DEFAULT_PIXEL_CONFIG: MetaPixelConfig = {
-  pixelId: '1027857760085345',
+  pixelId: '',
   enabled: true,
   testEventCode: '',
   trackViewContent: true,
