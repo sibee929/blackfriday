@@ -34,7 +34,6 @@ import {
 } from './components/PostPaymentModal';
 import { NewsletterAndVipSection } from './components/NewsletterAndVipSection';
 import { CookieConsentBanner } from './components/CookieConsentBanner';
-import { optimizeProductImage } from './data/catalog';
 
 export default function App() {
   const [products, setProducts] = useState<JacketProduct[]>(INITIAL_EIGHT_PRODUCTS);
@@ -43,6 +42,8 @@ export default function App() {
   const [cartOpen, setCartOpen] = useState<boolean>(false);
   const [pixelModalOpen, setPixelModalOpen] = useState<boolean>(false);
   const [adminModalOpen, setAdminModalOpen] = useState<boolean>(false);
+  const [adminSessionToken, setAdminSessionToken] = useState<string | null>(null);
+  const [fastCheckoutLoading, setFastCheckoutLoading] = useState<boolean>(false);
   const [legalDialog, setLegalDialog] = useState<LegalDocType>(null);
   const [externalOpenProductId, setExternalOpenProductId] = useState<string | null>(null);
   const [activeVoucherCode, setActiveVoucherCode] = useState<string>('');
@@ -135,12 +136,17 @@ export default function App() {
               telegramSent: data?.telegramSent,
             });
             setCartItems([]);
-            trackMetaEvent('Purchase', {
-              currency: 'EUR',
-              value: totalEur,
-              content_type: 'product',
-              content_ids: ['khabibi'],
-            });
+            trackMetaEvent(
+              'Purchase',
+              {
+                currency: 'EUR',
+                value: totalEur,
+                content_type: 'product',
+                content_ids: ['khabibi'],
+              },
+              undefined,
+              data?.orderId ?? sessionId
+            );
           }
         )
         .catch(() => {
@@ -187,6 +193,8 @@ export default function App() {
         setLegalDialog('widerruf');
       } else if (path === '/versand' || path === '/shipping') {
         setLegalDialog('versand');
+      } else if (path === '/admin') {
+        setAdminModalOpen(true);
       } else if (path === '/kollektion' || path === '/shop' || path === '/collection') {
         setTimeout(() => {
           document.getElementById('kollektion')?.scrollIntoView({ behavior: 'smooth' });
@@ -307,44 +315,86 @@ export default function App() {
     []
   );
 
-  const handleSavePixelConfig = useCallback(async (nextConfig: MetaPixelConfig) => {
-    const res = await fetch('/api/pixel-config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(nextConfig),
-    });
-    const data = (await res.json()) as MetaPixelConfig & { error?: string };
-    if (!res.ok) {
-      throw new Error(data.error ?? 'Speichern fehlgeschlagen.');
-    }
-    setPixelConfig(data);
-    saveLocalPixelConfig(data);
-    initAllAnalytics(data);
-  }, []);
-
-  const handleQuickAddUpsell = useCallback(
-    (prod: JacketProduct) => {
-      const color = prod.colors[0];
-      if (!color) return;
-      addConfiguredToCart(
-        {
-          productId: prod.id,
-          productName: prod.name,
-          colorVariant: {
-            id: color.id,
-            name: color.name,
-            hex: color.hex,
-            frontImage: optimizeProductImage(color.image, 640),
-          },
-          sizeLabel: 'L',
-          customMeasure: '',
-          giftWrap: true,
-          priceEur: prod.priceEur,
-        },
-        true
-      );
+  const handleSavePixelConfig = useCallback(
+    async (nextConfig: MetaPixelConfig) => {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (adminSessionToken) {
+        headers.Authorization = `Bearer ${adminSessionToken}`;
+      }
+      const res = await fetch('/api/pixel-config', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(nextConfig),
+      });
+      const data = (await res.json()) as MetaPixelConfig & { error?: string };
+      if (!res.ok) {
+        throw new Error(data.error ?? 'Speichern fehlgeschlagen (bitte über Admin einloggen).');
+      }
+      setPixelConfig(data);
+      saveLocalPixelConfig(data);
+      initAllAnalytics(data);
     },
-    [addConfiguredToCart]
+    [adminSessionToken]
+  );
+
+  const handleDirectFastCheckout = useCallback(
+    async (payload: ConfiguredOrderPayload) => {
+      if (fastCheckoutLoading) return;
+      setFastCheckoutLoading(true);
+
+      const cleanVoucher = activeVoucherCode.trim().toUpperCase();
+      const voucherOk =
+        payload.priceEur >= 49 &&
+        ['TREUE10', 'MRKSHI10', 'BLACKFRIDAY', 'VIP10'].includes(cleanVoucher);
+      const effectiveEur = Math.max(1, payload.priceEur - (voucherOk ? 10 : 0));
+
+      trackMetaEvent('InitiateCheckout', {
+        currency: 'EUR',
+        value: effectiveEur,
+        num_items: 1,
+        content_ids: [payload.productId],
+        leather_colors: [payload.colorVariant.name],
+      });
+
+      try {
+        const res = await fetch('/api/checkout/create-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            voucherCode: voucherOk ? cleanVoucher : undefined,
+            measurementsSummary: payload.customMeasure || undefined,
+            items: [
+              {
+                productId: payload.productId,
+                colorId: payload.colorVariant.id,
+                colorName: payload.colorVariant.name,
+                sizeLabel: payload.sizeLabel,
+                customMeasure: payload.customMeasure,
+                giftWrap: payload.giftWrap,
+                quantity: 1,
+              },
+            ],
+          }),
+        });
+
+        const data = (await res.json()) as { mode?: string; url?: string };
+        if (res.ok && data.mode === 'stripe' && data.url) {
+          if (window.top && window.top !== window) {
+            window.top.location.href = data.url;
+          } else {
+            window.location.href = data.url;
+          }
+          return;
+        }
+        // Fallback: place in cart & open drawer if preview mode or error
+        addConfiguredToCart(payload, true);
+      } catch {
+        addConfiguredToCart(payload, true);
+      } finally {
+        setFastCheckoutLoading(false);
+      }
+    },
+    [activeVoucherCode, addConfiguredToCart, fastCheckoutLoading]
   );
 
   const scrollToSection = (id: string) => {
@@ -418,17 +468,20 @@ export default function App() {
           priceEur={khabibiProduct.priceEur}
           stockTotal={khabibiProduct.stockTotal}
           extraGalleryUrls={khabibiProduct.gallery}
+          fastCheckoutLoading={fastCheckoutLoading}
           onSelectColor={(colorId) => handleSelectColor(colorId, 'gallery')}
           onAddToCart={addConfiguredToCart}
-          onDirectStripeCheckout={(payload) => addConfiguredToCart(payload, true)}
+          onDirectStripeCheckout={handleDirectFastCheckout}
         />
 
-        {/* 3. All 8 Real CSV Models in Rare Leather Colors */}
+        {/* 3. All 9 Real Models (1. Khabibi, 2. PUFFER, 3. Badboy, ...) */}
         <CollectionSixSection
           products={products}
           externalOpenProductId={externalOpenProductId}
+          fastCheckoutLoading={fastCheckoutLoading}
           onClearExternalOpen={() => setExternalOpenProductId(null)}
           onAddToCart={addConfiguredToCart}
+          onDirectFastCheckout={handleDirectFastCheckout}
           onSelectHeroColor={(colorId) => handleSelectColor(colorId, 'gallery')}
         />
 
@@ -458,10 +511,8 @@ export default function App() {
       <CartDrawer
         open={cartOpen}
         items={cartItems}
-        products={products}
         activeVoucherCode={activeVoucherCode}
         onVoucherChange={setActiveVoucherCode}
-        onQuickAddUpsell={handleQuickAddUpsell}
         onClose={() => setCartOpen(false)}
         onUpdateQty={handleUpdateQty}
         onRemoveItem={handleRemoveItem}
@@ -476,13 +527,18 @@ export default function App() {
           });
         }}
         onPreviewPurchaseComplete={(sessionId, totalEur, items, meta) => {
-          trackMetaEvent('Purchase', {
-            currency: 'EUR',
-            value: totalEur,
-            content_type: 'product',
-            content_ids: items.map((i) => i.productId),
-            leather_colors: items.map((i) => i.colorVariant.name),
-          });
+          trackMetaEvent(
+            'Purchase',
+            {
+              currency: 'EUR',
+              value: totalEur,
+              content_type: 'product',
+              content_ids: items.map((i) => i.productId),
+              leather_colors: items.map((i) => i.colorVariant.name),
+            },
+            undefined,
+            meta?.orderNumber ?? sessionId
+          );
           setCartItems([]);
           setCartOpen(false);
           setOrderConfirmation({
@@ -517,7 +573,8 @@ export default function App() {
         open={adminModalOpen}
         onClose={() => setAdminModalOpen(false)}
         onCatalogUpdated={(next) => setProducts(next)}
-        onOpenPixelSettings={() => {
+        onOpenPixelSettings={(activeAdminToken) => {
+          if (activeAdminToken) setAdminSessionToken(activeAdminToken);
           setAdminModalOpen(false);
           setPixelModalOpen(true);
         }}

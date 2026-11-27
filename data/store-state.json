@@ -105,8 +105,101 @@
       ]
     },
     {
-      "id": "la-veste-de-cuir-badboy",
+      "id": "doudoune-en-cuir-dagneau-bleu-marine",
       "code": "02",
+      "name": "Model PUFFER",
+      "subtitle": "Gesteppte Lamm-Nappa Daunenjacke · YKK-Zip",
+      "leatherType": "Lamm-Nappa",
+      "priceEur": 177,
+      "compareAtEur": 354,
+      "madPrice": 1940,
+      "tagline": "Winter-Statement: Warm wattierte Lamm-Nappa Daunenjacke in 6 seltenen Atelier-Farben.",
+      "description": "Die MRKSHI PUFFER vereint butterweiches 100 % Lamm-Nappa mit voluminöser Winter-Wattierung, Stehkragen, zwei YKK-Reißverschluss-Außentaschen und sicherer Brust-Innentasche — entwickelt für eiskalte Tage in Deutschland.",
+      "sizes": [
+        "S",
+        "M",
+        "L",
+        "XL",
+        "2XL",
+        "3XL"
+      ],
+      "stockTotal": 723,
+      "active": true,
+      "tags": [
+        "cuir",
+        "homme",
+        "marocain",
+        "puffer",
+        "winter",
+        "rare-colors"
+      ],
+      "colors": [
+        {
+          "id": "couleur-camel",
+          "name": "Tabak Camel",
+          "hex": "#9C6B3B",
+          "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MRKSHITabacLederjackeinleichtaufgehelltemTabakbraun.png?v=1794477862"
+        },
+        {
+          "id": "olive",
+          "name": "Edles Oliv",
+          "hex": "#4B563A",
+          "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MRKSHINappa-JackeinedlemOliv.png?v=1794477862"
+        },
+        {
+          "id": "marron",
+          "name": "Marron Braun",
+          "hex": "#5C3422",
+          "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MRKSHINappa-JackeinMarron.png?v=1794477862"
+        },
+        {
+          "id": "navy",
+          "name": "Mitternachtsblau",
+          "hex": "#1B2A44",
+          "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MitternachtsblaueNappa-Lederjacke_Frontansicht.png?v=1794477862"
+        },
+        {
+          "id": "noir",
+          "name": "Tiefschwarz",
+          "hex": "#151515",
+          "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/QuiltedLeatherJacketwithMRKSHILabel.png?v=1794477862"
+        },
+        {
+          "id": "rouge-bordeaux",
+          "name": "Bordeaux",
+          "hex": "#661A26",
+          "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/BordeauxroteMRKSHINappa-Lederjacke.png?v=1794477862"
+        }
+      ],
+      "gallery": [
+        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MRKSHITabacLederjackeinleichtaufgehelltemTabakbraun.png?v=1794477862",
+        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/QuiltedLeatherJacketwithMRKSHILabel.png?v=1794477862",
+        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MRKSHINappa-LederjackeinRuckansicht.png?v=1794477862",
+        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/EspressofarbeneNappa-LederjackeimSeitenprofil.png?v=1794477862",
+        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/OffeneMRKSHINappa-DaunenjackemitBurgunderfutter.png?v=1794477862",
+        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/BordeauxroteMRKSHINappa-Lederjacke.png?v=1794477862",
+        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MRKSHINappa-JackeinedlemOliv.png?v=1794477862",
+        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MitternachtsblaueNappa-Lederjacke_Frontansicht.png?v=1794477862",
+        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MRKSHINappa-JackeinMarron.png?v=1794477862",
+        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/BordeauxroteNappa-LederjackeinRuckansicht-2.png?v=1794477862",
+        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/BordeauxroteNappalederjackeimStudioportrat-1.png?v=1794477862",
+        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/Bordeaux-Nappa-JackeimDreiviertelprofil-3.png?v=1794477863",
+        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MRKSHITabacLederjackeinleichtaufgehelltemTabakbraun-hier-alles-biler-uznd-bleib-excakt-bei-dem.jpg?v=1794477861",
+        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MRKSHINappa-JackeinedlemOliv-mach-ein-bild-von-der-olive-jacke-in-der-hotelreze.jpg?v=1794477861",
+        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MRKSHINappa-JackeinMarron-kannst-du-jetzt-bitte-aber-bilder-in-luxus-restaur.jpg?v=1794477861",
+        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/image_20261112_105535.jpg?v=1794477861",
+        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/Mitternachtsblaue_Nappa-Lederjacke_Frontansicht-kannst-du-jetzt-bitte-aber-bilder-in-luxus-restaur.jpg?v=1794477861",
+        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/image_20261112_105528.jpg?v=1794477861",
+        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/image_20261112_105529.jpg?v=1794477861",
+        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/image_20261112_105343.jpg?v=1794477861",
+        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/image_20261112_105333_1.jpg?v=1794477861",
+        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/image_20261112_105107.jpg?v=1794477861",
+        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MRKSHINappa-JackeinedlemOliv-hier-alles-biler-uznd-bleib-excakt-bei-dem-model.jpg?v=1794477861"
+      ]
+    },
+    {
+      "id": "la-veste-de-cuir-badboy",
+      "code": "03",
       "name": "Model Badboy",
       "subtitle": "Trucker-Schnitt in 16 seltenen Farben",
       "leatherType": "Lamm-Nappa",
@@ -271,7 +364,7 @@
     },
     {
       "id": "la-veste-de-cuir-racer",
-      "code": "03",
+      "code": "04",
       "name": "Model Racer",
       "subtitle": "Moto-Lederjacke im Vintage-Finish",
       "leatherType": "Vollrind-Nappa",
@@ -354,7 +447,7 @@
     },
     {
       "id": "veste-en-cuir-d-agneau-pour-homme-marvis",
-      "code": "04",
+      "code": "05",
       "name": "Model Marvis",
       "subtitle": "Minimalistische Lamm-Nappa Jacke",
       "leatherType": "Lamm-Nappa",
@@ -422,7 +515,7 @@
     },
     {
       "id": "airmare-g-1-blouson-aviateur-en-cuir-marron",
-      "code": "05",
+      "code": "06",
       "name": "Model Airmare G-1",
       "subtitle": "Fliegerblouson aus Lamm-Nappa",
       "leatherType": "Lamm-Nappa",
@@ -476,7 +569,7 @@
     },
     {
       "id": "veste-en-cuir-dusty-pour-homme",
-      "code": "06",
+      "code": "07",
       "name": "Model Dusty",
       "subtitle": "Slim-Fit Patina Naturleder",
       "leatherType": "Vollrind-Nappa",
@@ -521,7 +614,7 @@
     },
     {
       "id": "noha-veste-en-cuir-homme-effet-dusty-noir-avec-pigments-gris-100-cuir-veritable",
-      "code": "07",
+      "code": "08",
       "name": "Model Noha",
       "subtitle": "Dusty Schwarz mit Graupigmenten",
       "leatherType": "Lamm-Nappa",
@@ -563,7 +656,7 @@
     },
     {
       "id": "cristian-blouson-homme-en-daim-elegant-sportif-100-cuir-veritable",
-      "code": "08",
+      "code": "09",
       "name": "Model Cristian",
       "subtitle": "Samtiges Natur-Wildleder Blouson",
       "leatherType": "Wildleder",
@@ -601,99 +694,6 @@
         "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/02FEF89A-0B2A-4F81-AD19-EFC0B6EDE775.jpg?v=1764700489",
         "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/1BE7E55C-0C2C-4D8E-BCE7-E36F33B2FB84.webp?v=1764700489",
         "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/F70D3D2E-4142-43B2-B77F-F4E7B439A459.webp?v=1764700489"
-      ]
-    },
-    {
-      "id": "doudoune-en-cuir-dagneau-bleu-marine",
-      "code": "09",
-      "name": "Model PUFFER",
-      "subtitle": "Gesteppte Lamm-Nappa Daunenjacke · YKK-Zip",
-      "leatherType": "Lamm-Nappa",
-      "priceEur": 177,
-      "compareAtEur": 354,
-      "madPrice": 1940,
-      "tagline": "Winter-Statement: Warm wattierte Lamm-Nappa Daunenjacke in 6 seltenen Atelier-Farben.",
-      "description": "Die MRKSHI PUFFER vereint butterweiches 100 % Lamm-Nappa mit voluminöser Winter-Wattierung, Stehkragen, zwei YKK-Reißverschluss-Außentaschen und sicherer Brust-Innentasche — entwickelt für eiskalte Tage in Deutschland.",
-      "sizes": [
-        "S",
-        "M",
-        "L",
-        "XL",
-        "2XL",
-        "3XL"
-      ],
-      "stockTotal": 723,
-      "active": true,
-      "tags": [
-        "cuir",
-        "homme",
-        "marocain",
-        "puffer",
-        "winter",
-        "rare-colors"
-      ],
-      "colors": [
-        {
-          "id": "couleur-camel",
-          "name": "Tabak Camel",
-          "hex": "#9C6B3B",
-          "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MRKSHITabacLederjackeinleichtaufgehelltemTabakbraun.png?v=1794477862"
-        },
-        {
-          "id": "olive",
-          "name": "Edles Oliv",
-          "hex": "#4B563A",
-          "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MRKSHINappa-JackeinedlemOliv.png?v=1794477862"
-        },
-        {
-          "id": "marron",
-          "name": "Marron Braun",
-          "hex": "#5C3422",
-          "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MRKSHINappa-JackeinMarron.png?v=1794477862"
-        },
-        {
-          "id": "navy",
-          "name": "Mitternachtsblau",
-          "hex": "#1B2A44",
-          "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MitternachtsblaueNappa-Lederjacke_Frontansicht.png?v=1794477862"
-        },
-        {
-          "id": "noir",
-          "name": "Tiefschwarz",
-          "hex": "#151515",
-          "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/QuiltedLeatherJacketwithMRKSHILabel.png?v=1794477862"
-        },
-        {
-          "id": "rouge-bordeaux",
-          "name": "Bordeaux",
-          "hex": "#661A26",
-          "image": "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/BordeauxroteMRKSHINappa-Lederjacke.png?v=1794477862"
-        }
-      ],
-      "gallery": [
-        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MRKSHITabacLederjackeinleichtaufgehelltemTabakbraun.png?v=1794477862",
-        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/QuiltedLeatherJacketwithMRKSHILabel.png?v=1794477862",
-        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MRKSHINappa-LederjackeinRuckansicht.png?v=1794477862",
-        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/EspressofarbeneNappa-LederjackeimSeitenprofil.png?v=1794477862",
-        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/OffeneMRKSHINappa-DaunenjackemitBurgunderfutter.png?v=1794477862",
-        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/BordeauxroteMRKSHINappa-Lederjacke.png?v=1794477862",
-        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MRKSHINappa-JackeinedlemOliv.png?v=1794477862",
-        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MitternachtsblaueNappa-Lederjacke_Frontansicht.png?v=1794477862",
-        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MRKSHINappa-JackeinMarron.png?v=1794477862",
-        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/BordeauxroteNappa-LederjackeinRuckansicht-2.png?v=1794477862",
-        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/BordeauxroteNappalederjackeimStudioportrat-1.png?v=1794477862",
-        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/Bordeaux-Nappa-JackeimDreiviertelprofil-3.png?v=1794477863",
-        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MRKSHITabacLederjackeinleichtaufgehelltemTabakbraun-hier-alles-biler-uznd-bleib-excakt-bei-dem.jpg?v=1794477861",
-        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MRKSHINappa-JackeinedlemOliv-mach-ein-bild-von-der-olive-jacke-in-der-hotelreze.jpg?v=1794477861",
-        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MRKSHINappa-JackeinMarron-kannst-du-jetzt-bitte-aber-bilder-in-luxus-restaur.jpg?v=1794477861",
-        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/image_20261112_105535.jpg?v=1794477861",
-        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/Mitternachtsblaue_Nappa-Lederjacke_Frontansicht-kannst-du-jetzt-bitte-aber-bilder-in-luxus-restaur.jpg?v=1794477861",
-        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/image_20261112_105528.jpg?v=1794477861",
-        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/image_20261112_105529.jpg?v=1794477861",
-        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/image_20261112_105343.jpg?v=1794477861",
-        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/image_20261112_105333_1.jpg?v=1794477861",
-        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/image_20261112_105107.jpg?v=1794477861",
-        "https://cdn.shopify.com/s/files/1/0915/4769/7537/files/MRKSHINappa-JackeinedlemOliv-hier-alles-biler-uznd-bleib-excakt-bei-dem-model.jpg?v=1794477861"
       ]
     }
   ],

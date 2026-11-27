@@ -56,15 +56,15 @@ export const AtelierSectionAndFooter: React.FC<AtelierFooterProps> = ({
 
           <div>
             <p className="text-[11.5px] font-bold tracking-[0.18em] uppercase text-black/60">
-              03. MASSCHECKER & 2-JACKEN RABATT
+              03. MASSCHECKER & 14 TAGE RÜCKGABE
             </p>
             <h3 className="mt-2 font-masculine text-[24px] font-bold text-black">
               PERFEKTE PASSFORM S–3XL OHNE RISIKO.
             </h3>
             <p className="mt-2.5 text-[14.5px] font-medium leading-[1.6] text-black/75">
               Jede Größe S–3XL plus kostenloses Direkt-Maß (vor & nach Bezahlung) zum selben Preis
-              von 177,00 €. Bei 2+ Jacken gibt es 20,00 € Kombi-Rabatt. 14 Tage Rückgabe in
-              Schöneck.
+              von 177,00 €. Volles 14-tägiges Rückgaberecht über unseren deutschen Standort in
+              61137 Schöneck.
             </p>
           </div>
         </div>
@@ -118,17 +118,10 @@ export const AtelierSectionAndFooter: React.FC<AtelierFooterProps> = ({
             </button>
             <button
               type="button"
-              onClick={onOpenPixelSettings}
-              className="font-bold uppercase tracking-[0.04em] text-black underline underline-offset-4 hover:opacity-70 transition-opacity cursor-pointer"
-            >
-              Pixel & Analytics {pixelConfigured ? '(1027857760085345)' : ''}
-            </button>
-            <button
-              type="button"
               onClick={onOpenAdminPanel}
-              className="font-bold uppercase tracking-[0.04em] text-black underline underline-offset-4 hover:opacity-70 transition-opacity cursor-pointer"
+              className="text-black/55 hover:text-black transition-colors cursor-pointer"
             >
-              Reverse-Shopify Admin
+              Verkäufer-Login
             </button>
           </div>
         </div>
@@ -264,11 +257,11 @@ export const AtelierSectionAndFooter: React.FC<AtelierFooterProps> = ({
                     (Art. 6 Abs. 1 lit. b DSGVO).
                   </p>
                   <p>
-                    <strong>5. Meta Pixel (ID 1027857760085345) & Newsletter:</strong>{' '}
-                    Marketing-Tracking (Meta Pixel, GA4) wird erst nach Ihrer ausdrücklichen
-                    Einwilligung über den Cookie-Banner (Art. 6 Abs. 1 lit. a DSGVO, § 25 TTDSG)
-                    geladen. Newsletter-Daten dienen nur dem Versand von Gutscheinen (TREUE10) und
-                    neuen Leder-Drops und können jederzeit widerrufen werden.
+                    <strong>5. Meta Pixel & Newsletter:</strong>{' '}
+                    Marketing-Tracking (Meta Pixel, Conversions API, GA4) wird erst nach Ihrer
+                    ausdrücklichen Einwilligung über den Cookie-Banner (Art. 6 Abs. 1 lit. a DSGVO,
+                    § 25 TDDDG) geladen. Newsletter-Daten dienen nur dem Versand von Gutscheinen
+                    (TREUE10) und neuen Leder-Drops und können jederzeit widerrufen werden.
                   </p>
                 </>
               )}

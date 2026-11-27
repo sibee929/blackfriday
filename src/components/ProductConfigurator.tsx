@@ -33,6 +33,7 @@ interface ProductConfiguratorProps {
   priceEur?: number;
   stockTotal?: number;
   extraGalleryUrls?: string[];
+  fastCheckoutLoading?: boolean;
   onSelectColor: (colorId: string) => void;
   onAddToCart: (payload: ConfiguredOrderPayload, openDrawer: boolean) => void;
   onDirectStripeCheckout: (payload: ConfiguredOrderPayload) => void;
@@ -43,6 +44,7 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
   priceEur = 177,
   stockTotal = 631,
   extraGalleryUrls = [],
+  fastCheckoutLoading = false,
   onSelectColor,
   onAddToCart,
   onDirectStripeCheckout,
@@ -464,22 +466,27 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
             <span>Kostenlose Weihnachts-Geschenkbox (Umtausch bis 15. Januar)</span>
           </label>
 
-          {/* Actions */}
+          {/* Actions: 1-Click Express Checkout + Add to Cart */}
           <div className="mt-6 flex flex-col sm:flex-row gap-2.5">
             <button
               type="button"
-              onClick={() => onAddToCart(buildPayload(), true)}
-              className="flex-1 h-[48px] px-5 bg-black text-white text-[14px] font-bold uppercase tracking-[0.06em] hover:bg-neutral-800 transition-colors inline-flex items-center justify-center gap-2 cursor-pointer"
+              disabled={fastCheckoutLoading}
+              onClick={() => onDirectStripeCheckout(buildPayload())}
+              className="flex-1 h-[50px] px-5 bg-black text-white text-[14px] font-bold uppercase tracking-[0.06em] hover:bg-neutral-800 disabled:opacity-60 transition-colors inline-flex items-center justify-center gap-2 cursor-pointer"
             >
-              <ShoppingBag className="w-4 h-4" />
-              <span>IN DEN WARENKORB — {priceEur},00 €</span>
+              <span>
+                {fastCheckoutLoading
+                  ? 'EXPRESS-KASSE ÖFFNET…'
+                  : `⚡ SOFORT KAUFEN — ${priceEur},00 €`}
+              </span>
             </button>
             <button
               type="button"
-              onClick={() => onDirectStripeCheckout(buildPayload())}
-              className="h-[48px] px-5 border-2 border-black bg-white text-black text-[14px] font-bold uppercase tracking-[0.06em] hover:bg-black hover:text-white transition-colors cursor-pointer whitespace-nowrap"
+              onClick={() => onAddToCart(buildPayload(), true)}
+              className="h-[50px] px-5 border-2 border-black bg-white text-black text-[13.5px] font-bold uppercase tracking-[0.05em] hover:bg-black hover:text-white transition-colors inline-flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
             >
-              STRIPE CHECKOUT
+              <ShoppingBag className="w-4 h-4" />
+              <span>IN DEN WARENKORB</span>
             </button>
           </div>
 

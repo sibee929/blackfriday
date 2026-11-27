@@ -8,8 +8,10 @@ import { ConfiguredOrderPayload } from './ProductConfigurator';
 interface CollectionSixSectionProps {
   products: JacketProduct[];
   externalOpenProductId?: string | null;
+  fastCheckoutLoading?: boolean;
   onClearExternalOpen?: () => void;
   onAddToCart: (payload: ConfiguredOrderPayload, openDrawer: boolean) => void;
+  onDirectFastCheckout?: (payload: ConfiguredOrderPayload) => void;
   onSelectHeroColor?: (colorId: string) => void;
 }
 
@@ -18,8 +20,10 @@ type FilterTab = 'alle' | 'nappa' | 'wildleder' | 'rare';
 export const CollectionSixSection: React.FC<CollectionSixSectionProps> = ({
   products,
   externalOpenProductId,
+  fastCheckoutLoading = false,
   onClearExternalOpen,
   onAddToCart,
+  onDirectFastCheckout,
   onSelectHeroColor,
 }) => {
   const [filter, setFilter] = useState<FilterTab>('alle');
@@ -110,28 +114,29 @@ export const CollectionSixSection: React.FC<CollectionSixSectionProps> = ({
     }
   };
 
-  const handleBuyProduct = (product: JacketProduct, openDrawer: boolean) => {
+  const buildProductPayload = (product: JacketProduct): ConfiguredOrderPayload => {
     const activeColor = getActiveColor(product);
     const activeSize = getActiveSize(product);
     const customNote = customMeasures[product.id] ?? '';
 
-    onAddToCart(
-      {
-        productId: product.id,
-        productName: product.name,
-        colorVariant: {
-          id: activeColor.id,
-          name: activeColor.name,
-          hex: activeColor.hex,
-          frontImage: optimizeProductImage(activeColor.image, 640),
-        },
-        sizeLabel: customNote.includes('Direkt-Maß') ? 'Maßanfertigung' : activeSize,
-        customMeasure: customNote,
-        giftWrap: true,
-        priceEur: product.priceEur,
+    return {
+      productId: product.id,
+      productName: product.name,
+      colorVariant: {
+        id: activeColor.id,
+        name: activeColor.name,
+        hex: activeColor.hex,
+        frontImage: optimizeProductImage(activeColor.image, 640),
       },
-      openDrawer
-    );
+      sizeLabel: customNote.includes('Direkt-Maß') ? 'Maßanfertigung' : activeSize,
+      customMeasure: customNote,
+      giftWrap: true,
+      priceEur: product.priceEur,
+    };
+  };
+
+  const handleBuyProduct = (product: JacketProduct, openDrawer: boolean) => {
+    onAddToCart(buildProductPayload(product), openDrawer);
   };
 
   const handleApplyMassChecker = (res: MassCheckerResult, useCustom: boolean) => {
@@ -363,11 +368,24 @@ export const CollectionSixSection: React.FC<CollectionSixSectionProps> = ({
                   <div className="flex gap-1.5">
                     <button
                       type="button"
+                      disabled={fastCheckoutLoading}
+                      onClick={() =>
+                        onDirectFastCheckout
+                          ? onDirectFastCheckout(buildProductPayload(jacket))
+                          : handleBuyProduct(jacket, true)
+                      }
+                      className="flex-1 h-9 px-2.5 bg-black text-white text-[12px] font-bold uppercase tracking-[0.05em] hover:bg-neutral-800 disabled:opacity-60 flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <span>⚡ Sofort kaufen</span>
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => handleBuyProduct(jacket, true)}
-                      className="flex-1 h-9 px-3 bg-black text-white text-[12.5px] font-bold uppercase tracking-[0.06em] hover:bg-neutral-800 flex items-center justify-center gap-1.5 cursor-pointer"
+                      aria-label={`${jacket.name} in den Warenkorb`}
+                      title="In den Warenkorb"
+                      className="h-9 px-2.5 border border-black text-black text-[11.5px] font-bold uppercase hover:bg-black hover:text-white transition-colors flex items-center justify-center gap-1 cursor-pointer"
                     >
                       <ShoppingBag className="w-3.5 h-3.5" />
-                      <span>Kaufen</span>
                     </button>
                     <button
                       type="button"
@@ -375,9 +393,9 @@ export const CollectionSixSection: React.FC<CollectionSixSectionProps> = ({
                         setDetailProduct(jacket);
                         setDetailImageIdx(0);
                       }}
-                      className="h-9 px-2.5 border border-black text-black text-[11.5px] font-bold uppercase tracking-[0.04em] hover:bg-black hover:text-white transition-colors cursor-pointer"
+                      className="h-9 px-2 border border-black/30 text-black text-[11px] font-bold uppercase hover:border-black transition-colors cursor-pointer"
                     >
-                      Galerie ({jacket.gallery.length})
+                      Fotos ({jacket.gallery.length})
                     </button>
                   </div>
                 </div>
@@ -584,17 +602,35 @@ export const CollectionSixSection: React.FC<CollectionSixSectionProps> = ({
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleBuyProduct(detailProduct, true);
-                    setDetailProduct(null);
-                  }}
-                  className="w-full h-12 bg-black text-white text-[14px] font-bold uppercase tracking-[0.06em] hover:bg-neutral-800 flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <ShoppingBag className="w-4 h-4" />
-                  <span>IN DEN WARENKORB — {detailProduct.priceEur},00 €</span>
-                </button>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    type="button"
+                    disabled={fastCheckoutLoading}
+                    onClick={() => {
+                      const payload = buildProductPayload(detailProduct);
+                      setDetailProduct(null);
+                      if (onDirectFastCheckout) {
+                        onDirectFastCheckout(payload);
+                      } else {
+                        onAddToCart(payload, true);
+                      }
+                    }}
+                    className="flex-1 h-12 bg-black text-white text-[13.5px] font-bold uppercase tracking-[0.06em] hover:bg-neutral-800 disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <span>⚡ SOFORT KAUFEN — {detailProduct.priceEur},00 €</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleBuyProduct(detailProduct, true);
+                      setDetailProduct(null);
+                    }}
+                    className="h-12 px-4 border-2 border-black bg-white text-black text-[13px] font-bold uppercase tracking-[0.05em] hover:bg-black hover:text-white flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <ShoppingBag className="w-4 h-4" />
+                    <span>WARENKORB</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>

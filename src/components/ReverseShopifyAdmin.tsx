@@ -45,6 +45,7 @@ interface OrderRecord {
   items: OrderItemRecord[];
   n8nSent: boolean;
   telegramSent: boolean;
+  shippingSummary?: string;
   createdAt: string;
   paidAt?: string;
 }
@@ -80,7 +81,7 @@ interface ReverseShopifyAdminProps {
   open: boolean;
   onClose: () => void;
   onCatalogUpdated: (nextProducts: JacketProduct[]) => void;
-  onOpenPixelSettings: () => void;
+  onOpenPixelSettings: (activeAdminToken?: string | null) => void;
 }
 
 export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
@@ -385,9 +386,9 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
       </div>
       <h1>Rechnung ${esc(order.id)}</h1>
       <div class="grid">
-        <div><strong>Rechnung an:</strong><br/>${esc(order.customerEmail)}<br/>${esc(
+        <div><strong>Rechnung an:</strong><br/>${esc(order.customerEmail || 'Lt. Stripe-Beleg')}<br/>${esc(
       order.whatsappNumber || ''
-    )}<br/><span class="muted">Lieferadresse lt. Stripe-Checkout</span></div>
+    )}<br/><span class="muted">${esc(order.shippingSummary || 'Lieferadresse lt. Stripe-Checkout')}</span></div>
         <div class="r">
           <strong>Rechnungsdatum:</strong> ${date}<br/>
           <strong>Bestellnummer:</strong> ${esc(order.id)}<br/>
@@ -675,12 +676,18 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
                           <div className="p-3 rounded-lg bg-[#FAFAFA] space-y-1">
                             <p>
                               <strong className="text-[#000000]">E-Mail:</strong>{' '}
-                              {order.customerEmail}
+                              {order.customerEmail || 'Wird über Stripe erfasst'}
                             </p>
                             <p>
-                              <strong className="text-[#000000]">WhatsApp:</strong>{' '}
-                              {order.whatsappNumber}
+                              <strong className="text-[#000000]">Telefon / WhatsApp:</strong>{' '}
+                              {order.whatsappNumber || 'Lt. Stripe Checkout'}
                             </p>
+                            {order.shippingSummary && (
+                              <p>
+                                <strong className="text-[#000000]">Lieferadresse:</strong>{' '}
+                                {order.shippingSummary}
+                              </p>
+                            )}
                             <p>
                               <strong className="text-[#000000]">Maßchecker:</strong>{' '}
                               {order.measurementsSummary || 'Standardgröße'}
@@ -1117,7 +1124,7 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={onOpenPixelSettings}
+                        onClick={() => onOpenPixelSettings(token)}
                         className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg border border-[#000000]/20 text-[12.5px] font-medium cursor-pointer"
                       >
                         <Settings className="w-3.5 h-3.5" />

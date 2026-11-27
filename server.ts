@@ -54,6 +54,9 @@ interface OrderRecord {
   n8nSent: boolean;
   telegramSent: boolean;
   inventoryDecremented: boolean;
+  shippingSummary?: string;
+  clientIp?: string;
+  clientUserAgent?: string;
   createdAt: string;
   paidAt?: string;
 }
@@ -151,9 +154,14 @@ function loadStoreState(): StoreState {
     const mergedProducts = [...mergedDefaults, ...customProducts];
 
     const savedPixel = parsed.pixelConfig ?? ({} as Partial<PixelConfigState>);
+    const envPixel = (process.env.META_PIXEL_ID ?? '').trim();
+    const hasCustomEnvPixel = /^\d{10,20}$/.test(envPixel);
+    const savedId = typeof savedPixel.pixelId === 'string' ? savedPixel.pixelId.trim() : '';
     const resolvedPixelId =
-      typeof savedPixel.pixelId === 'string' && /^\d{10,20}$/.test(savedPixel.pixelId.trim())
-        ? savedPixel.pixelId.trim()
+      hasCustomEnvPixel && (!savedId || savedId === DEFAULT_META_PIXEL_ID)
+        ? envPixel
+        : /^\d{10,20}$/.test(savedId)
+        ? savedId
         : defaults.pixelConfig.pixelId;
 
     return {
@@ -301,12 +309,15 @@ async function sendMetaCapiPurchase(order: OrderRecord): Promise<void> {
               event_name: 'Purchase',
               event_time: Math.floor(Date.now() / 1000),
               action_source: 'website',
+              event_source_url: 'https://mrkshi.com/',
               event_id: order.id,
               user_data: {
                 em: order.customerEmail ? [sha256(order.customerEmail)] : undefined,
                 ph: order.whatsappNumber
                   ? [sha256(order.whatsappNumber.replace(/[^\d]/g, ''))]
                   : undefined,
+                client_ip_address: order.clientIp || undefined,
+                client_user_agent: order.clientUserAgent || undefined,
               },
               custom_data: {
                 currency: 'EUR',
@@ -324,6 +335,31 @@ async function sendMetaCapiPurchase(order: OrderRecord): Promise<void> {
     );
   } catch {
     // non-fatal analytics failure
+  }
+}
+
+function enrichOrderFromStripeSession(order: OrderRecord, session: Stripe.Checkout.Session): void {
+  const stripeEmail = session.customer_details?.email?.trim().toLowerCase();
+  if (stripeEmail && !order.customerEmail) {
+    order.customerEmail = stripeEmail;
+  }
+  const stripePhone = session.customer_details?.phone?.trim();
+  if (stripePhone && !order.whatsappNumber) {
+    order.whatsappNumber = stripePhone;
+  }
+  const ship = session.collected_information?.shipping_details ?? session.customer_details;
+  const addr = ship?.address;
+  if (addr && !order.shippingSummary) {
+    const parts = [
+      ship?.name,
+      addr.line1,
+      addr.line2,
+      [addr.postal_code, addr.city].filter(Boolean).join(' '),
+      addr.country,
+    ].filter(Boolean);
+    if (parts.length > 0) {
+      order.shippingSummary = parts.join(', ').slice(0, 240);
+    }
   }
 }
 
@@ -388,8 +424,9 @@ async function dispatchOrderNotifications(
       ``,
       linesText,
       ``,
-      `📧 E-Mail: ${order.customerEmail}`,
-      `📱 WhatsApp: ${order.whatsappNumber}`,
+      `📧 E-Mail: ${order.customerEmail || 'via Stripe'}`,
+      order.whatsappNumber ? `📱 Tel/WhatsApp: ${order.whatsappNumber}` : '',
+      order.shippingSummary ? `🏠 Adresse: ${order.shippingSummary}` : '',
       waLink ? `💬 Chat: ${waLink}` : '',
       order.measurementsSummary ? `📏 Maßchecker: ${order.measurementsSummary}` : '',
       order.giftNote ? `🎁 Notiz: ${order.giftNote}` : '',
@@ -487,6 +524,7 @@ async function startServer() {
           const session = event.data.object as Stripe.Checkout.Session;
           const order = store.orders.find((o) => o.sessionId === session.id);
           if (order && session.payment_status === 'paid') {
+            enrichOrderFromStripeSession(order, session);
             await markOrderPaidAndDispatch(order);
           }
         }
@@ -650,7 +688,7 @@ async function startServer() {
     });
   });
 
-  app.post('/api/pixel-config', (req: Request, res: Response) => {
+  app.post('/api/pixel-config', requireAdminAuth, (req: Request, res: Response) => {
     const body = req.body as Partial<PixelConfigState>;
     const rawPixelId = typeof body.pixelId === 'string' ? body.pixelId.trim() : '';
     const rawGa4 = typeof body.ga4MeasurementId === 'string' ? body.ga4MeasurementId.trim().toUpperCase() : '';
@@ -827,7 +865,10 @@ async function startServer() {
 
     const customerEmail =
       typeof body.customerEmail === 'string' ? body.customerEmail.trim().toLowerCase() : '';
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail) || customerEmail.length > 120) {
+    if (
+      customerEmail &&
+      (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail) || customerEmail.length > 120)
+    ) {
       res.status(400).json({ error: 'Bitte eine gültige E-Mail-Adresse eingeben.' });
       return;
     }
@@ -846,9 +887,14 @@ async function startServer() {
         ? body.measurementsSummary.trim().slice(0, 180)
         : '';
     const giftNote = typeof body.giftNote === 'string' ? body.giftNote.trim().slice(0, 200) : '';
-    const upsellCareKit = Boolean(body.upsellCareKit);
     const rawVoucher =
       typeof body.voucherCode === 'string' ? body.voucherCode.trim().toUpperCase() : '';
+    const clientIp =
+      (typeof req.headers['cf-connecting-ip'] === 'string' && req.headers['cf-connecting-ip']) ||
+      req.ip ||
+      '';
+    const clientUserAgent =
+      typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'].slice(0, 250) : '';
 
     const validatedLines: OrderItemRecord[] = [];
     let totalJacketQty = 0;
@@ -909,38 +955,21 @@ async function startServer() {
       });
     }
 
-    if (upsellCareKit) {
-      validatedLines.push({
-        productId: 'mrkshi-care-kit',
-        name: 'MRKSHI Argan-Bienenwachs Lederpflege-Set (100 ml + Tuch)',
-        colorName: 'Naturpflege',
-        sizeLabel: 'Atelier-Set',
-        customMeasure: '',
-        giftWrap: false,
-        unitAmountCents: 1400,
-        quantity: 1,
-      });
-    }
-
     const subtotalCents = validatedLines.reduce(
       (sum, line) => sum + line.unitAmountCents * line.quantity,
       0
     );
 
-    // Upsell Bundle Discount (-20 EUR for 2+ jackets) + Loyalty Voucher (TREUE10 / MRKSHI10 / BLACKFRIDAY / VIP10 -> -10 EUR)
-    const bundleDiscountCents = !includesOneEuroTest && totalJacketQty >= 2 ? 2000 : 0;
+    // Loyalty Voucher ONLY (TREUE10 / MRKSHI10 / BLACKFRIDAY / VIP10 -> -10 EUR)
     const VALID_VOUCHERS = new Set(['TREUE10', 'MRKSHI10', 'BLACKFRIDAY', 'VIP10']);
     const voucherValid =
-      !includesOneEuroTest &&
-      subtotalCents - bundleDiscountCents >= 4900 &&
-      VALID_VOUCHERS.has(rawVoucher);
+      !includesOneEuroTest && subtotalCents >= 4900 && VALID_VOUCHERS.has(rawVoucher);
     const voucherDiscountCents = voucherValid ? 1000 : 0;
-    const totalDiscountCents = bundleDiscountCents + voucherDiscountCents;
+    const totalDiscountCents = voucherDiscountCents;
     const totalCents = Math.max(100, subtotalCents - totalDiscountCents);
 
     const discountLabels: string[] = [];
-    if (bundleDiscountCents > 0) discountLabels.push('2-Jacken Kombi (-20 €)');
-    if (voucherDiscountCents > 0) discountLabels.push(`Treue-Code ${rawVoucher} (-10 €)`);
+    if (voucherDiscountCents > 0) discountLabels.push(`Gutschein ${rawVoucher} (-10 €)`);
 
     const orderId = `MRK-${store.orderCounter++}`;
     const stripe = getStripeClient();
@@ -1041,11 +1070,11 @@ async function startServer() {
       const session = await stripe.checkout.sessions.create({
         mode: 'payment',
         locale: 'de',
-        customer_email: customerEmail,
+        ...(customerEmail ? { customer_email: customerEmail } : {}),
         shipping_address_collection: {
           allowed_countries: ['DE', 'AT', 'CH'],
         },
-        billing_address_collection: 'required',
+        billing_address_collection: 'auto',
         phone_number_collection: {
           enabled: true,
         },
@@ -1084,6 +1113,8 @@ async function startServer() {
         n8nSent: false,
         telegramSent: false,
         inventoryDecremented: false,
+        clientIp,
+        clientUserAgent,
         createdAt: new Date().toISOString(),
       };
       store.orders.unshift(order);
@@ -1162,6 +1193,7 @@ async function startServer() {
     try {
       const session = await stripe.checkout.sessions.retrieve(sessionId);
       if (existingOrder && session.payment_status === 'paid') {
+        enrichOrderFromStripeSession(existingOrder, session);
         await markOrderPaidAndDispatch(existingOrder);
       }
       res.json({

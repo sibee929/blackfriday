@@ -250,7 +250,8 @@ export function initMetaPixel(config: MetaPixelConfig): void {
 export function trackMetaEvent(
   eventName: PixelEventLogEntry['eventName'],
   payload: Record<string, unknown>,
-  configOverride?: MetaPixelConfig
+  configOverride?: MetaPixelConfig,
+  eventId?: string
 ): void {
   const config = configOverride ?? loadLocalPixelConfig();
 
@@ -273,7 +274,11 @@ export function trackMetaEvent(
   const platforms: string[] = [];
 
   if (canSendMeta && window.fbq) {
-    window.fbq('track', eventName, enrichedPayload);
+    if (eventId) {
+      window.fbq('track', eventName, enrichedPayload, { eventID: eventId });
+    } else {
+      window.fbq('track', eventName, enrichedPayload);
+    }
     platforms.push('Meta Pixel');
   }
 
