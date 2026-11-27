@@ -190,11 +190,16 @@ export const CollectionSixSection: React.FC<CollectionSixSectionProps> = ({
 
         {/* 9-Product Pure White & Black Grid */}
         <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          {visibleProducts.map((jacket) => {
+          {visibleProducts.map((jacket, cardIdx) => {
             const activeColor = getActiveColor(jacket);
             const activeSize = getActiveSize(jacket);
             const optimizedSrc = optimizeProductImage(activeColor.image, 640);
             const imgFailed = failedImages[optimizedSrc];
+            const openDetails = () => {
+              setDetailProduct(jacket);
+              setDetailImageIdx(0);
+              onViewProduct?.(jacket, activeColor.name);
+            };
 
             return (
               <article
@@ -204,10 +209,15 @@ export const CollectionSixSection: React.FC<CollectionSixSectionProps> = ({
                 <div>
                   {/* Fast-loading White Studio Image (click anywhere on image to open detail modal) */}
                   <div
-                    onClick={() => {
-                      setDetailProduct(jacket);
-                      setDetailImageIdx(0);
-                      onViewProduct?.(jacket, activeColor.name);
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${jacket.name} Details & Fotos öffnen`}
+                    onClick={openDetails}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        openDetails();
+                      }
                     }}
                     className="relative aspect-[4/4.4] bg-white border-b border-black/10 overflow-hidden group cursor-pointer"
                   >
@@ -215,7 +225,7 @@ export const CollectionSixSection: React.FC<CollectionSixSectionProps> = ({
                       <img
                         src={optimizedSrc}
                         alt={`${jacket.name} — ${activeColor.name}`}
-                        loading="lazy"
+                        loading={cardIdx < 4 ? 'eager' : 'lazy'}
                         decoding="async"
                         referrerPolicy="no-referrer"
                         onError={() =>
@@ -235,7 +245,7 @@ export const CollectionSixSection: React.FC<CollectionSixSectionProps> = ({
                       </div>
                     )}
 
-                    <div className="absolute left-2.5 top-2.5 flex items-center gap-1">
+                    <div className="absolute left-2.5 top-2.5 flex items-center gap-1 pointer-events-none">
                       <span className="px-2 py-0.5 bg-black text-white text-[10px] font-bold tracking-[0.08em] uppercase">
                         {jacket.leatherType}
                       </span>
@@ -244,37 +254,41 @@ export const CollectionSixSection: React.FC<CollectionSixSectionProps> = ({
                       </span>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDetailProduct(jacket);
-                        setDetailImageIdx(0);
-                      }}
-                      aria-label={`${jacket.name} komplette Galerie ansehen (${jacket.gallery.length} Bilder)`}
-                      className="absolute right-2.5 top-2.5 h-8 px-2 bg-white border border-black text-black flex items-center gap-1 hover:bg-black hover:text-white transition-colors cursor-pointer"
-                    >
+                    <span className="absolute right-2.5 top-2.5 h-8 px-2 bg-white border border-black text-black flex items-center gap-1 group-hover:bg-black group-hover:text-white transition-colors pointer-events-none">
                       <Expand className="w-3.5 h-3.5" />
                       <span className="text-[10.5px] font-bold tabular-nums">
                         {jacket.gallery.length}
                       </span>
-                    </button>
+                    </span>
                   </div>
 
                   <div className="p-4">
-                    <div className="flex items-center justify-between gap-2 text-[11px] font-bold uppercase tracking-[0.08em] text-black/60 tabular-nums">
-                      <span className="font-mono">{jacket.code}</span>
-                      <span>
-                        {jacket.colors.length} {jacket.colors.length === 1 ? 'Farbe' : 'Farben'} ·{' '}
-                        {jacket.gallery.length} Fotos
-                      </span>
-                    </div>
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={openDetails}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          openDetails();
+                        }
+                      }}
+                      className="cursor-pointer group/title"
+                    >
+                      <div className="flex items-center justify-between gap-2 text-[11px] font-bold uppercase tracking-[0.08em] text-black/60 tabular-nums">
+                        <span className="font-mono">{jacket.code}</span>
+                        <span className="underline underline-offset-2 group-hover/title:text-black">
+                          Details & {jacket.gallery.length} Fotos →
+                        </span>
+                      </div>
 
-                    <h3 className="mt-1 font-masculine text-[21px] font-bold text-black">
-                      {jacket.name}
-                    </h3>
-                    <p className="text-[12.5px] font-medium text-black/70 line-clamp-2 mt-0.5">
-                      {jacket.tagline}
-                    </p>
+                      <h3 className="mt-1 font-masculine text-[21px] font-bold text-black group-hover/title:underline underline-offset-2">
+                        {jacket.name}
+                      </h3>
+                      <p className="text-[12.5px] font-medium text-black/70 line-clamp-2 mt-0.5">
+                        {jacket.tagline}
+                      </p>
+                    </div>
 
                     {/* Interactive Color Swatches */}
                     <div className="mt-3">
