@@ -3,6 +3,7 @@ export interface ColorOption {
   name: string;
   hex: string;
   image: string;
+  outOfStock?: boolean;
 }
 
 export interface JacketProduct {
@@ -198,7 +199,8 @@ export const INITIAL_EIGHT_PRODUCTS: JacketProduct[] = [
         "id": "rouge-bordeaux",
         "name": "Bordeaux",
         "hex": "#661A26",
-        "image": "/assets/catalog/img_b7b83d0e6e4b.webp"
+        "image": "/assets/catalog/img_b7b83d0e6e4b.webp",
+        "outOfStock": true
       }
     ],
     "gallery": [

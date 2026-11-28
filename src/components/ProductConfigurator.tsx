@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, Expand, Gift, Ruler, ShoppingBag, Sparkles, X } from 'lucide-react';
 import {
@@ -9,7 +9,7 @@ import {
   KhabibiColorVariant,
   preloadGalleryImages,
 } from '../data/jackets';
-import { optimizeProductImage } from '../data/catalog';
+import { ColorOption, optimizeProductImage } from '../data/catalog';
 import { MassCheckerModal, MassCheckerResult } from './MassCheckerModal';
 import { PaymentLogos } from './PaymentLogos';
 
@@ -33,6 +33,7 @@ interface ProductConfiguratorProps {
   priceEur?: number;
   compareAtEur?: number;
   stockTotal?: number;
+  catalogColors?: ColorOption[];
   extraGalleryUrls?: string[];
   fastCheckoutLoading?: boolean;
   onSelectColor: (colorId: string) => void;
@@ -45,17 +46,28 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
   priceEur = 177,
   compareAtEur = 354,
   stockTotal = 631,
+  catalogColors = [],
   extraGalleryUrls = [],
   fastCheckoutLoading = false,
   onSelectColor,
   onAddToCart,
   onDirectStripeCheckout,
 }) => {
-  const isOutOfStock = stockTotal <= 0;
   const activeVariant: KhabibiColorVariant = useMemo(
     () => KHABIBI_COLORS.find((v) => v.id === selectedColorId) ?? KHABIBI_COLORS[0],
     [selectedColorId]
   );
+  const isColorOutOfStock = useCallback(
+    (variantId: string, variantName: string) => {
+      const found = catalogColors.find(
+        (c) => c.id === variantId || c.name.toLowerCase() === variantName.toLowerCase()
+      );
+      return Boolean(found?.outOfStock);
+    },
+    [catalogColors]
+  );
+  const activeColorSoldOut = isColorOutOfStock(activeVariant.id, activeVariant.name);
+  const isOutOfStock = stockTotal <= 0;
 
   const galleryItems: GalleryShot[] = useMemo(() => {
     const items: GalleryShot[] = [
@@ -310,10 +322,14 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
           <div className="mt-6 pt-5 border-t border-black/15">
             <span className="block text-[13px] font-bold uppercase tracking-[0.08em] text-black">
               LEDERFARBE: {activeVariant.name}
+              {activeColorSoldOut && (
+                <span className="ml-2 text-red-600">— AKTUELL AUSVERKAUFT</span>
+              )}
             </span>
             <div className="mt-2.5 flex flex-wrap gap-2">
               {KHABIBI_COLORS.map((variant) => {
                 const selected = variant.id === activeVariant.id;
+                const soldOut = isColorOutOfStock(variant.id, variant.name);
                 return (
                   <button
                     key={variant.id}
@@ -323,13 +339,13 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
                       selected
                         ? 'border-black bg-black text-white'
                         : 'border-black/25 bg-white text-black hover:border-black'
-                    }`}
+                    } ${soldOut ? 'opacity-65' : ''}`}
                   >
                     <span
                       className="w-3.5 h-3.5 rounded-full border border-white/40 shrink-0"
                       style={{ backgroundColor: variant.hex }}
                     />
-                    <span>{variant.name}</span>
+                    <span className={soldOut ? 'line-through' : ''}>{variant.name}</span>
                   </button>
                 );
               })}
@@ -463,6 +479,10 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
             {isOutOfStock ? (
               <div className="w-full h-[50px] px-5 bg-neutral-200 text-neutral-600 text-[13.5px] font-bold uppercase tracking-[0.06em] inline-flex items-center justify-center">
                 AKTUELL AUSVERKAUFT — NÄCHSTE CHARGE IN KÜRZE
+              </div>
+            ) : activeColorSoldOut ? (
+              <div className="w-full h-[50px] px-5 bg-red-50 border-2 border-red-300 text-red-800 text-[12.5px] font-bold uppercase tracking-[0.05em] inline-flex items-center justify-center text-center">
+                FARBE „{activeVariant.name}“ AKTUELL AUSVERKAUFT — BITTE OBEN ANDERE FARBE WÄHLEN
               </div>
             ) : (
               <>

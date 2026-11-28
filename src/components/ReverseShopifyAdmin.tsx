@@ -2801,8 +2801,44 @@ export const ReverseShopifyAdmin: React.FC<ReverseShopifyAdminProps> = ({
                                           setDraft({ ...draft, colors: next });
                                         }}
                                         placeholder="Farbname"
-                                        className="w-36 h-8 px-2.5 rounded border border-black/20 bg-white font-semibold"
+                                        className={`w-36 h-8 px-2.5 rounded border border-black/20 bg-white font-semibold ${
+                                          c.outOfStock ? 'line-through text-red-700' : ''
+                                        }`}
                                       />
+                                      <button
+                                        type="button"
+                                        title={
+                                          c.outOfStock
+                                            ? 'Farbe wieder auf Lager setzen'
+                                            : 'Nur diese Farbe auf Ausverkauft (Out of Stock) setzen'
+                                        }
+                                        onClick={async () => {
+                                          const nextOutOfStock = !c.outOfStock;
+                                          const nextColors = [...draft.colors];
+                                          nextColors[cIdx] = {
+                                            ...c,
+                                            outOfStock: nextOutOfStock,
+                                          };
+                                          const nextDraft = {
+                                            ...draft,
+                                            colors: nextColors,
+                                          };
+                                          setDraft(nextDraft);
+                                          await handleUpdateProduct(prod.id, nextDraft);
+                                          setToastMsg(
+                                            nextOutOfStock
+                                              ? `Farbe „${c.name}“ (${prod.name}) ist jetzt auf AUSVERKAUFT gesetzt — alle anderen Farben bleiben aktiv.`
+                                              : `Farbe „${c.name}“ (${prod.name}) ist wieder AUF LAGER.`
+                                          );
+                                        }}
+                                        className={`h-8 px-2.5 rounded font-bold text-[11px] shrink-0 cursor-pointer border ${
+                                          c.outOfStock
+                                            ? 'bg-red-600 text-white border-red-700 hover:bg-red-700'
+                                            : 'bg-emerald-50 text-emerald-900 border-emerald-300 hover:bg-emerald-100'
+                                        }`}
+                                      >
+                                        {c.outOfStock ? '✕ Ausverkauft' : '✓ Auf Lager'}
+                                      </button>
                                       <select
                                         value={c.image}
                                         onChange={async (e) => {

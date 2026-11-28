@@ -543,6 +543,7 @@ export default function App() {
           priceEur={khabibiProduct.priceEur}
           compareAtEur={khabibiProduct.compareAtEur}
           stockTotal={khabibiProduct.stockTotal}
+          catalogColors={khabibiProduct.colors}
           extraGalleryUrls={khabibiProduct.gallery}
           fastCheckoutLoading={fastCheckoutLoading}
           onSelectColor={(colorId) => handleSelectColor(colorId, 'gallery')}

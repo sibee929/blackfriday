@@ -84,7 +84,11 @@ export const CollectionSixSection: React.FC<CollectionSixSectionProps> = ({
 
   const getActiveColor = (product: JacketProduct) => {
     const colorId = selectedColors[product.id];
-    return product.colors.find((c) => c.id === colorId) ?? product.colors[0];
+    if (colorId) {
+      const chosen = product.colors.find((c) => c.id === colorId);
+      if (chosen) return chosen;
+    }
+    return product.colors.find((c) => !c.outOfStock) ?? product.colors[0];
   };
 
   const getActiveSize = (product: JacketProduct) => {
@@ -257,9 +261,13 @@ export const CollectionSixSection: React.FC<CollectionSixSectionProps> = ({
                       <span className="px-2 py-0.5 bg-black text-white text-[10px] font-bold tracking-[0.08em] uppercase">
                         {jacket.leatherType}
                       </span>
-                      {jacket.stockTotal <= 0 ? (
+                      {jacket.stockTotal <= 0 || jacket.colors.every((c) => c.outOfStock) ? (
                         <span className="px-1.5 py-0.5 bg-red-600 text-white text-[10px] font-bold tracking-[0.06em] uppercase">
                           Ausverkauft
+                        </span>
+                      ) : activeColor?.outOfStock ? (
+                        <span className="px-1.5 py-0.5 bg-red-600 text-white text-[10px] font-bold tracking-[0.06em] uppercase">
+                          Farbe ausverkauft
                         </span>
                       ) : jacket.compareAtEur > jacket.priceEur ? (
                         <span className="px-1.5 py-0.5 bg-white border border-black text-black text-[10px] font-bold tracking-[0.06em] uppercase tabular-nums">
@@ -308,6 +316,11 @@ export const CollectionSixSection: React.FC<CollectionSixSectionProps> = ({
                     <div className="mt-3">
                       <p className="text-[11.5px] font-bold uppercase tracking-[0.04em] text-black mb-1.5 truncate">
                         FARBE: {activeColor.name}
+                        {activeColor.outOfStock && (
+                          <span className="ml-1.5 text-red-600 font-extrabold">
+                            (AUSVERKAUFT)
+                          </span>
+                        )}
                       </p>
                       <div className="flex flex-wrap gap-1.5">
                         {jacket.colors.map((c) => {
@@ -316,16 +329,27 @@ export const CollectionSixSection: React.FC<CollectionSixSectionProps> = ({
                             <button
                               key={c.id}
                               type="button"
-                              title={c.name}
-                              aria-label={`${jacket.name} Farbe ${c.name}`}
+                              title={c.outOfStock ? `${c.name} (Aktuell ausverkauft)` : c.name}
+                              aria-label={`${jacket.name} Farbe ${c.name}${
+                                c.outOfStock ? ' (Ausverkauft)' : ''
+                              }`}
                               onClick={() => handleChooseColor(jacket, c.id)}
-                              className={`w-6 h-6 rounded-full border transition-transform cursor-pointer ${
+                              className={`relative w-6 h-6 rounded-full border transition-transform cursor-pointer overflow-hidden ${
                                 selected
                                   ? 'ring-2 ring-black ring-offset-1 scale-105 border-black'
                                   : 'border-black/25 hover:scale-105'
-                              }`}
+                              } ${c.outOfStock ? 'opacity-50' : ''}`}
                               style={{ backgroundColor: c.hex }}
-                            />
+                            >
+                              {c.outOfStock && (
+                                <span
+                                  aria-hidden="true"
+                                  className="pointer-events-none absolute inset-0 flex items-center justify-center"
+                                >
+                                  <span className="block w-7 h-[2px] bg-white shadow-xs -rotate-45" />
+                                </span>
+                              )}
+                            </button>
                           );
                         })}
                       </div>
@@ -388,9 +412,13 @@ export const CollectionSixSection: React.FC<CollectionSixSectionProps> = ({
                   </div>
 
                   <div className="flex gap-1.5">
-                    {jacket.stockTotal <= 0 ? (
+                    {jacket.stockTotal <= 0 || jacket.colors.every((c) => c.outOfStock) ? (
                       <span className="flex-1 h-9 px-2.5 bg-neutral-200 text-neutral-600 text-[11.5px] font-bold uppercase tracking-[0.05em] flex items-center justify-center">
                         Ausverkauft
+                      </span>
+                    ) : activeColor?.outOfStock ? (
+                      <span className="flex-1 h-9 px-2.5 bg-red-50 border border-red-300 text-red-700 text-[11px] font-bold uppercase tracking-[0.04em] flex items-center justify-center text-center">
+                        Farbe ausverkauft
                       </span>
                     ) : (
                       <>
@@ -565,6 +593,9 @@ export const CollectionSixSection: React.FC<CollectionSixSectionProps> = ({
                     <p className="text-[12.5px] font-bold uppercase tracking-[0.06em] text-black mb-2">
                       LEDERFARBE ({detailProduct.colors.length}):{' '}
                       {getActiveColor(detailProduct).name}
+                      {getActiveColor(detailProduct).outOfStock && (
+                        <span className="ml-2 text-red-600">— AKTUELL AUSVERKAUFT</span>
+                      )}
                     </p>
                     <div className="flex flex-wrap gap-1.5">
                       {detailProduct.colors.map((c) => {
@@ -581,13 +612,18 @@ export const CollectionSixSection: React.FC<CollectionSixSectionProps> = ({
                               active
                                 ? 'border-black bg-black text-white'
                                 : 'border-black/25 bg-white text-black hover:border-black'
-                            }`}
+                            } ${c.outOfStock ? 'opacity-65' : ''}`}
                           >
                             <span
                               className="w-3 h-3 rounded-full border border-white/40"
                               style={{ backgroundColor: c.hex }}
                             />
-                            <span>{c.name}</span>
+                            <span className={c.outOfStock ? 'line-through' : ''}>{c.name}</span>
+                            {c.outOfStock && (
+                              <span className="text-[10px] uppercase font-extrabold text-red-500">
+                                Leer
+                              </span>
+                            )}
                           </button>
                         );
                       })}
@@ -633,9 +669,15 @@ export const CollectionSixSection: React.FC<CollectionSixSectionProps> = ({
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-2">
-                  {detailProduct.stockTotal <= 0 ? (
+                  {detailProduct.stockTotal <= 0 ||
+                  detailProduct.colors.every((c) => c.outOfStock) ? (
                     <div className="w-full h-12 bg-neutral-200 text-neutral-600 text-[13px] font-bold uppercase tracking-[0.06em] flex items-center justify-center">
                       AKTUELL AUSVERKAUFT
+                    </div>
+                  ) : getActiveColor(detailProduct).outOfStock ? (
+                    <div className="w-full h-12 px-4 bg-red-50 border-2 border-red-300 text-red-800 text-[12.5px] font-bold uppercase tracking-[0.05em] flex items-center justify-center text-center">
+                      FARBE „{getActiveColor(detailProduct).name}“ AKTUELL AUSVERKAUFT — BITTE OBEN
+                      ANDERE FARBE WÄHLEN
                     </div>
                   ) : (
                     <>

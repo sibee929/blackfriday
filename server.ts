@@ -331,7 +331,20 @@ function loadStoreState(): StoreState {
               ? saved.compareAtEur
               : defProd.compareAtEur,
           gallery: savedGalleryClean ? saved.gallery : defProd.gallery,
-          colors: savedColorsClean ? saved.colors : defProd.colors,
+          colors: savedColorsClean
+            ? saved.colors.map((sc) => {
+                const defColor = defProd.colors.find(
+                  (dc) => dc.id === sc.id || dc.name.toLowerCase() === sc.name.toLowerCase()
+                );
+                return {
+                  ...sc,
+                  outOfStock:
+                    typeof sc.outOfStock === 'boolean'
+                      ? sc.outOfStock
+                      : Boolean(defColor?.outOfStock),
+                };
+              })
+            : defProd.colors,
           stockTotal: typeof saved.stockTotal === 'number' ? saved.stockTotal : defProd.stockTotal,
           active: typeof saved.active === 'boolean' ? saved.active : defProd.active,
         });
@@ -1788,12 +1801,22 @@ async function startServer() {
       }
 
       const colorId = typeof item.colorId === 'string' ? item.colorId.trim() : '';
-      const matchedColor = product.colors.find((c) => c.id === colorId);
-      const colorName =
-        matchedColor?.name ??
-        (typeof item.colorName === 'string' && item.colorName.trim()
-          ? item.colorName.trim().slice(0, 40)
-          : product.colors[0]?.name ?? 'Signature');
+      const rawColorName =
+        typeof item.colorName === 'string' ? item.colorName.trim().slice(0, 40) : '';
+      const matchedColor =
+        product.colors.find((c) => c.id === colorId) ??
+        (rawColorName
+          ? product.colors.find((c) => c.name.toLowerCase() === rawColorName.toLowerCase())
+          : undefined);
+
+      if (matchedColor?.outOfStock) {
+        res.status(400).json({
+          error: `${product.name} in der Farbe „${matchedColor.name}“ ist aktuell leider ausverkauft. Bitte wähle eine andere verfügbare Farbe.`,
+        });
+        return;
+      }
+
+      const colorName = matchedColor?.name ?? (rawColorName || product.colors[0]?.name || 'Signature');
 
       const quantity = Number.isInteger(item.quantity) ? Number(item.quantity) : 1;
       if (quantity < 1 || quantity > 10) {
@@ -3164,7 +3187,8 @@ async function startServer() {
             typeof c.image === 'string' && c.image.trim()
               ? c.image.trim().slice(0, 500)
               : prod.gallery[0] ?? '';
-          return { id: cId, name: cName, hex: cHex, image: cImg };
+          const cOutOfStock = Boolean(c.outOfStock);
+          return { id: cId, name: cName, hex: cHex, image: cImg, outOfStock: cOutOfStock };
         })
         .filter((c) => c.image.length > 0);
       if (cleanColors.length > 0) {
